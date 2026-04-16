@@ -1,0 +1,7 @@
+name,url,username,password,note,cardholder,cardnumber,cvc,expirydate,zipcode,folder,full_name,phone_number,email,address1,address2,city,country,state,type,note_date
+GitHub,https://github.com,user@example.com,s3cr3t,,,,,,,,,,,,,,,,password,
+"Ação, Büro & Co.",https://example.com/ação,üser,pässwörd,"Nota com, vírgula e unicode: ção",,,,,,Work,,,,,,,,,password,
+Visa Platinum,,,,,,4111111111111111,321,2026-12,01310-100,,,,,,,,,,credit_card,2024-03-15T10:00:00
+"Wi-Fi Config",,,,"SSID: HomeNet\nSenha: wifi123",,,,,,,,,,,,,,,note,2023-11-01T08:30:00
+"João Silva",,,,,,,,,,,"João da Silva",+55-11-99999-9999,joao@example.com,"Rua das Flores, 123","Apto 4B",São Paulo,Brazil,SP,identity,
+Empty URL Login,,nobody,pass123,,,,,,,,,,,,,,,,password,

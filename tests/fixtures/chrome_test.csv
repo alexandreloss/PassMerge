@@ -1,0 +1,6 @@
+name,url,username,password,note
+GitHub,https://github.com,user@example.com,s3cr3t!Pass,
+"Ação, Büro & Co.",https://example.com/ação,üser,pässwörd,"Nota com, vírgula e unicode: ção"
+Empty URL,,nobody,pass123,
+"Note with comma, inside",https://example.com,u,p,"First line, Second line"
+NoTitle,,anon,anon123,

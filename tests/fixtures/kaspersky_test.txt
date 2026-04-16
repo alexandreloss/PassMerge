@@ -1,0 +1,60 @@
+Websites
+
+Website name: GitHub
+Website URL: https://github.com
+Login name:
+Login: user@example.com
+Password: s3cr3t!Pass
+Comment: Conta pessoal
+
+---
+
+Website name: Ação, Büro & Co.
+Website URL: https://example.com/ação
+Login name:
+Login: üser
+Password: pässwörd
+Comment: Nota com, vírgula e unicode: ção
+
+---
+
+Website name: Empty URL Site
+Website URL:
+Login name:
+Login: nobody
+Password: pass123
+Comment:
+
+---
+
+Applications
+
+Application name: VPN Client
+Login name:
+Login: vpnuser
+Password: vpnSecure99
+Comment: Usar apenas na rede corporativa
+
+---
+
+Application name: Database Tool
+Login name:
+Login: dbadmin
+Password: dbpass!
+Comment:
+
+---
+
+Notes
+
+Note name: Wi-Fi da Empresa
+Note text: SSID: EmpresaWifi / Senha: superSecret99
+Comment:
+
+---
+
+Note name: Dados Bancários
+Note text: Agência: 1234, Conta: 56789-0
+Comment:
+
+---
