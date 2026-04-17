@@ -18,7 +18,7 @@ Fase 2 da arquitetura — **Importers**:
 - Normalização de campos reutilizável (`normalize_url`, `normalize_email`, `normalize_phone`)
 - Comando `passmerge import` com suporte a múltiplas fontes simultâneas
 - `SourceFileRef` gravado no vault (sha256, contagem de itens, caminho)
-- Suíte de testes com **115 casos** (unittest, sem dependências externas)
+- Suíte de testes com **120 casos** (unittest, sem dependências externas)
 
 Fase 1 mantida integralmente: schema canônico, mapeamento nativo, vault JSON, wipe seguro.
 
@@ -46,22 +46,29 @@ Fase 1 mantida integralmente: schema canônico, mapeamento nativo, vault JSON, w
 Todos os argumentos de fonte são opcionais — informe ao menos um:
 
     python -m passmerge import \
-        --chrome     google_export.csv   \
-        --nordpass   nordpass_export.csv \
-        --onepassword meu_export.1pux   \
-        --kaspersky  kaspersky_export.txt \
-        --vault      meu_vault.json
+        --chrome      google_export.csv   \
+        --nordpass    nordpass_export.csv \
+        --onepassword meu_export.1pux     \
+        --kaspersky   kaspersky_export.txt \
+        --vault       meu_vault.json
 
 Se o vault ainda não existir, ele é criado automaticamente. Se já existir,
 os novos itens são acrescentados (sem deduplicação — isso é tarefa da Fase 3).
 
-Formatos aceitos por gerenciador:
+### Como exportar do 1Password
+
+1. Abra o app 1Password
+2. Vá em **Arquivo → Exportar → Todos os Vaults**
+3. Escolha o formato **1Password (`.1pux`)**
+4. Salve o arquivo e passe o caminho para `--onepassword`
+
+### Formatos aceitos por gerenciador
 
 | Gerenciador | Flag | Formato | Categorias suportadas |
 | --- | --- | --- | --- |
 | Google Chrome | `--chrome` | CSV (5 colunas) | LOGIN |
 | NordPass | `--nordpass` | CSV (multi-categoria) | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
-| 1Password | `--onepassword` | `.1pux` (ZIP+JSON) | LOGIN, CREDIT_CARD, SECURE_NOTE, SERVER, WIRELESS, IDENTITY, DATABASE, SOFTWARE_LICENSE |
+| 1Password | `--onepassword` | `.1pux` (ZIP + JSON) | LOGIN, CREDIT_CARD, SECURE_NOTE, SERVER, WIRELESS, IDENTITY, DATABASE, SOFTWARE_LICENSE |
 | Kaspersky | `--kaspersky` | TXT (blocos) | LOGIN, SECURE_NOTE |
 
 ### Ver resumo do vault
@@ -74,7 +81,7 @@ Formatos aceitos por gerenciador:
 
 ### Apagar um arquivo com sobrescrita segura
 
-    python -m passmerge wipe --file google_export.csv --yes
+    python -m passmerge wipe --file meu_export.1pux --yes
 
 ## Estrutura
 
@@ -90,7 +97,7 @@ Formatos aceitos por gerenciador:
         base.py                # classe abstrata Importer
         chrome.py              # Google Chrome CSV
         nordpass.py            # NordPass CSV
-        onepassword.py         # 1Password .1pux
+        onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
         kaspersky.py           # Kaspersky TXT
       security/
         wipe.py                # sobrescrita segura 3-pass
@@ -102,6 +109,7 @@ Formatos aceitos por gerenciador:
         nordpass_test.csv
         onepassword_test.1pux
         kaspersky_test.txt
+        make_onepassword_fixture.py   # gerador da fixture .1pux
       test_canonical.py
       test_phase1_acceptance.py
       test_importer_chrome.py
@@ -113,7 +121,7 @@ Formatos aceitos por gerenciador:
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **115 testes, todos OK**.
+Resultado esperado: **120 testes, todos OK**.
 
 ## Critério de aceite (Fase 2)
 

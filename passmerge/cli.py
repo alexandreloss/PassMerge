@@ -134,10 +134,10 @@ def cmd_import(args: argparse.Namespace) -> int:
     from .importers.onepassword import OnePasswordImporter
 
     sources = [
-        ("chrome", args.chrome, ChromeImporter()),
-        ("nordpass", args.nordpass, NordPassImporter()),
-        ("onepassword", args.onepassword, OnePasswordImporter()),
-        ("kaspersky", args.kaspersky, KasperskyImporter()),
+        ("chrome",      args.chrome,      ChromeImporter()),
+        ("nordpass",    args.nordpass,     NordPassImporter()),
+        ("onepassword", args.onepassword,  OnePasswordImporter()),
+        ("kaspersky",   args.kaspersky,    KasperskyImporter()),
     ]
 
     # Valida que ao menos um arquivo foi informado
