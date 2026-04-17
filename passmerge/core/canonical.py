@@ -38,7 +38,7 @@ class Category(str, Enum):
 
 # Campos esperados por categoria (validação leve na Fase 1; estrita na F3).
 CATEGORY_FIELDS: dict[Category, set[str]] = {
-    Category.LOGIN: {"username", "password", "url", "otp", "urls_additional"},
+    Category.LOGIN: {"username", "password", "url", "otp", "urls_additional", "pin"},
     Category.CREDIT_CARD: {"cardholder", "number", "cvv", "expiration",
                            "brand", "pin", "zip"},
     Category.SERVER: {"hostname", "port", "username", "password",
