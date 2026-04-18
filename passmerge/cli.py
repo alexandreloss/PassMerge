@@ -128,6 +128,7 @@ def cmd_wipe(args: argparse.Namespace) -> int:
 
 def cmd_import(args: argparse.Namespace) -> int:
     # Importação lazy para evitar ciclos no topo do módulo
+    from .core.merger import merge
     from .importers.chrome import ChromeImporter
     from .importers.kaspersky import KasperskyImporter
     from .importers.nordpass import NordPassImporter
@@ -158,33 +159,47 @@ def cmd_import(args: argparse.Namespace) -> int:
     else:
         vault = empty_vault()
 
-    total_imported = 0
-
+    # --- Importar cada fonte ---
+    item_groups: list[list] = []
     for source_name, raw_path, importer in active:
         file_path = Path(raw_path)
         if not file_path.exists():
             print(f"ERRO: arquivo nao encontrado: {file_path}", file=sys.stderr)
             return 1
-
         try:
             items = importer.parse(file_path)
         except Exception as exc:
             print(f"ERRO ao importar {file_path} ({source_name}): {exc}",
                   file=sys.stderr)
             return 1
-
-        vault.items.extend(items)
+        item_groups.append(items)
         vault.source_files.append(SourceFileRef(
             source=source_name,
             path=str(file_path.resolve()),
             sha256=_sha256(file_path),
             item_count=len(items),
         ))
-        print(f"  [{source_name}] {len(items)} itens importados de {file_path}")
-        total_imported += len(items)
+        print(f"  [{source_name}] {len(items)} itens lidos de {file_path}")
+
+    # --- Merge (só quando há ≥2 fontes) ---
+    if len(item_groups) >= 2:
+        result = merge(item_groups)
+        vault.items.extend(result.items)
+        s = result.stats
+        print(f"  merge: {s.total_input} → {s.total_output} itens "
+              f"({s.groups_merged} grupos merged, "
+              f"{s.fields_complemented} campos complementados)")
+        if len(result.conflict_log):
+            summary = result.conflict_log.summary()
+            conflicts_path = vault_path.with_suffix(".conflicts.json")
+            result.conflict_log.save(conflicts_path)
+            print(f"  conflitos para revisão manual: {summary['requires_review']} → {conflicts_path.name}")
+    else:
+        vault.items.extend(item_groups[0])
+        print(f"  (fonte única — merge ignorado)")
 
     _save_vault(vault, vault_path)
-    print(f"OK: {total_imported} itens gravados em {vault_path}")
+    print(f"OK: {len(vault.items)} itens gravados em {vault_path}")
     return 0
 
 

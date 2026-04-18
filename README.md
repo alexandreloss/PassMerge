@@ -1,4 +1,4 @@
-# PassMerge - Fase 2 (Importers)
+# PassMerge - Fase 3 (Merger)
 
 Consolidador local de credenciais entre Google/Chrome, NordPass, 1Password e
 Kaspersky Password Manager.
@@ -11,16 +11,14 @@ Kaspersky Password Manager.
 
 ## Estado desta entrega
 
-Fase 2 da arquitetura — **Importers**:
+Fase 3 da arquitetura — **Merger**:
 
-- 4 importers concretos: Chrome (CSV), NordPass (CSV), 1Password (`.1pux`), Kaspersky (TXT)
-- Classe abstrata `Importer` com interface uniforme (`parse`, `source_name`, `supported_categories`, `supports_timestamps`)
-- Normalização de campos reutilizável (`normalize_url`, `normalize_email`, `normalize_phone`)
-- Comando `passmerge import` com suporte a múltiplas fontes simultâneas
-- `SourceFileRef` gravado no vault (sha256, contagem de itens, caminho)
-- Suíte de testes com **120 casos** (unittest, sem dependências externas)
+- `core/matching.py` — chave de deduplicação por categoria (`primary_key`)
+- `core/conflict.py` — log de conflitos em JSONL, sem valores em texto claro (só SHA-256)
+- `core/merger.py` — merge campo a campo: timestamp → fonte rica → prioridade; complementação; preservação de perdedores em `extras["_losers"]`
+- `passmerge import` unifica automaticamente ≥2 fontes e grava `vault.conflicts.jsonl` se houver conflitos
 
-Fase 1 mantida integralmente: schema canônico, mapeamento nativo, vault JSON, wipe seguro.
+Fases 1 e 2 mantidas integralmente: 4 importers, schema canônico, vault JSON, wipe seguro.
 
 ## Requisitos
 
@@ -30,10 +28,11 @@ Fase 1 mantida integralmente: schema canônico, mapeamento nativo, vault JSON, w
 ## Fluxo de uso
 
 1. Exporte as senhas de cada gerenciador (gera CSV/TXT/1PUX em texto claro).
-2. Importe tudo para um vault unificado com `passmerge import`.
-3. Verifique o vault com `passmerge verify` e revise com `passmerge status`.
-4. *(Fase 3)* Resolva conflitos; *(Fase 4)* reexporte nos formatos nativos.
-5. Apague todos os arquivos intermediários com `passmerge wipe`.
+2. Importe e faça merge com `passmerge import` (múltiplas fontes são unificadas automaticamente).
+3. Se houver conflitos, revise `vault.conflicts.jsonl` (campos sensíveis nunca aparecem em texto claro).
+4. Verifique o vault com `passmerge verify` e revise o resumo com `passmerge status`.
+5. *(Fase 4)* Reexporte nos formatos nativos.
+6. Apague todos os arquivos intermediários com `passmerge wipe`.
 
 ## Uso
 
@@ -52,8 +51,8 @@ Todos os argumentos de fonte são opcionais — informe ao menos um:
         --kaspersky   kaspersky_export.txt \
         --vault       meu_vault.json
 
-Se o vault ainda não existir, ele é criado automaticamente. Se já existir,
-os novos itens são acrescentados (sem deduplicação — isso é tarefa da Fase 3).
+Se o vault ainda não existir, ele é criado automaticamente. Com ≥2 fontes,
+o merger agrupa duplicatas e resolve conflitos automaticamente.
 
 ### Como exportar do 1Password
 
@@ -70,6 +69,11 @@ os novos itens são acrescentados (sem deduplicação — isso é tarefa da Fase
 | NordPass | `--nordpass` | CSV (multi-categoria) | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
 | 1Password | `--onepassword` | `.1pux` (ZIP + JSON) | LOGIN, CREDIT_CARD, SECURE_NOTE, SERVER, WIRELESS, IDENTITY, DATABASE, SOFTWARE_LICENSE |
 | Kaspersky | `--kaspersky` | TXT (blocos) | LOGIN, SECURE_NOTE |
+
+### Exemplo de comando completo
+
+python -m passmerge import --onepassword C:\Users\Alexandre\Senhas\1Password.1pux --kaspersky C:\Users\Alexandre\Senhas\Kaspersky.txt --chrome C:\Users\Alexandre\Senhas\Chrome.csv --vault C:\Users\Alexandre\Senhas\cofre.json
+
 
 ### Ver resumo do vault
 
@@ -93,6 +97,9 @@ os novos itens são acrescentados (sem deduplicação — isso é tarefa da Fase
         canonical.py           # Vault, CanonicalItem, Category, SourceRef
         categories.py          # mapeamento canônico ↔ nativo (4 gerenciadores)
         normalize.py           # normalize_url, normalize_email, normalize_phone
+        matching.py            # primary_key por categoria (deduplicação)
+        conflict.py            # ConflictLog, ConflictEntry (JSONL, sem plaintext)
+        merger.py              # merge(), MergeResult, MergeStats
       importers/
         base.py                # classe abstrata Importer
         chrome.py              # Google Chrome CSV
@@ -116,21 +123,46 @@ os novos itens são acrescentados (sem deduplicação — isso é tarefa da Fase
       test_importer_nordpass.py
       test_importer_onepassword.py
       test_importer_kaspersky.py
+      test_matching.py           # chaves de deduplicação por categoria
+      test_conflict.py           # ConflictLog / ConflictEntry
+      test_merger.py             # 7 cenários de merge
 
 ## Testes
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **120 testes, todos OK**.
+Resultado esperado: **182 testes, todos OK**.
 
-## Critério de aceite (Fase 2)
+## Merge: como funciona
 
-**Atendido** — cada importer:
+Quando `passmerge import` recebe ≥2 fontes, o merger:
 
-- Produz ≥ 1 `CanonicalItem` por categoria que suporta.
-- Anota `SourceRef` (source + imported_at) em todos os itens.
-- Preenche `updated_at` quando a fonte suporta timestamps (1Password, NordPass).
-- Preserva unicode, vírgulas em notas e URLs vazias sem truncar.
+1. Agrupa itens por `(category, primary_key)` — chave canônica por categoria.
+2. **Grupos com 1 item** → passam direto.
+3. **Grupos com >1 item** → resolve campo a campo:
+   - Timestamp mais recente vence.
+   - Item com timestamp vence item sem timestamp.
+   - Sem timestamp e valores divergem → prioridade (`1password > nordpass > kaspersky > chrome`); conflito marcado `requires_review=True`.
+4. **Complementação:** campos vazios no vencedor são preenchidos por outros itens do grupo.
+5. **Preservação:** valores perdedores ficam em `extras["_losers"]` (com SHA-256, nunca em texto claro).
+6. **Log de conflitos** gravado em `<vault>.conflicts.jsonl`.
+
+
+### Revisar conflitos
+
+    cat meu_vault.conflicts.jsonl | python -m json.tool
+
+Cada linha tem: `conflict_id`, `item_title`, `field`, `candidates` (com `value_hash` SHA-256),
+`auto_resolution`, `requires_review`.
+
+## Critério de aceite (Fases 1–3)
+
+**Atendido:**
+
+- Importers produzem ≥1 `CanonicalItem` por categoria suportada.
+- Merger deduplica corretamente em todos os 7 cenários de teste.
+- Campos sensíveis (password, etc.) nunca aparecem em texto claro no log.
+- Merge é não-destrutivo: nenhum valor é silenciosamente descartado.
 
 ## Mudança em relação à arquitetura original
 
@@ -139,10 +171,9 @@ scrypt/Argon2id. Após revisão, optou-se por **JSON plano** porque o fluxo
 de uso é de curta duração e os arquivos de entrada já estão em texto claro.
 O módulo `security/wipe.py` garante o apagamento seguro no passo final.
 
-## Próximos passos (Fase 3)
+## Próximos passos (Fase 4)
 
-Implementar o merge inteligente:
+Implementar os exporters:
 
-- Deduplicação por `normalize_url` + `normalize_email`
-- Resolução de conflitos por `updated_at` (timestamp mais recente vence)
-- Comando `passmerge resolve` para casos ambíguos
+- Reexportar vault para CSV Chrome, CSV NordPass, TXT Kaspersky e `.1pux` 1Password
+- Comando `passmerge export --target chrome --output saida.csv --vault vault.json`
