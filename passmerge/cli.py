@@ -9,9 +9,9 @@ Comandos implementados:
                       [--onepassword Z.1pux] [--kaspersky W.txt]
                       --vault out.json
     passmerge manual  --vault out.json --log out.conflicts.json
-
-Comandos planejados (Fase 4+):
-    passmerge export ...
+    passmerge export  --vault out.json
+                      [--to-chrome out.csv] [--to-nordpass out.csv]
+                      [--to-onepassword out.1pux] [--to-kaspersky out.txt]
 """
 from __future__ import annotations
 
@@ -296,6 +296,48 @@ def cmd_manual(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    from .exporters.chrome import ChromeExporter
+    from .exporters.kaspersky import KasperskyExporter
+    from .exporters.nordpass import NordPassExporter
+    from .exporters.onepassword import OnePasswordExporter
+
+    targets = [
+        ("chrome",      args.to_chrome,      ChromeExporter()),
+        ("nordpass",    args.to_nordpass,     NordPassExporter()),
+        ("onepassword", args.to_onepassword,  OnePasswordExporter()),
+        ("kaspersky",   args.to_kaspersky,    KasperskyExporter()),
+    ]
+    active = [(name, path, exp) for name, path, exp in targets if path]
+    if not active:
+        print(
+            "ERRO: informe ao menos um destino "
+            "(--to-chrome, --to-nordpass, --to-onepassword ou --to-kaspersky).",
+            file=sys.stderr,
+        )
+        return 1
+
+    vault = _load_vault(Path(args.vault))
+
+    for name, raw_path, exporter in active:
+        out_path = Path(raw_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        report = exporter.export(vault.items, out_path)
+        print(f"  [{name}] {report.exported_count} itens → {out_path}")
+        if report.skipped_items:
+            for s in report.skipped_items:
+                print(f"    SKIP: '{s['title']}' ({s['category']}) — {s['reason']}")
+        if report.truncated_fields:
+            for t in report.truncated_fields:
+                print(f"    TRUNCADO: '{t['title']}' campo '{t['field']}' "
+                      f"({t['original_len']} → {t['max_len']} chars)")
+        if report.warnings:
+            for w in report.warnings:
+                print(f"    AVISO: {w}")
+
+    return 0
+
+
 # ---------- parser ----------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -353,8 +395,16 @@ def build_parser() -> argparse.ArgumentParser:
                           help="arquivo de conflitos gerado pelo import (ex.: vault.conflicts.json)")
     p_manual.set_defaults(func=cmd_manual)
 
-    p_export = sub.add_parser("export", help="[não implementado ainda]")
-    p_export.set_defaults(func=_not_implemented)
+    p_export = sub.add_parser(
+        "export",
+        help="exporta o vault para os formatos nativos dos gerenciadores",
+    )
+    p_export.add_argument("--vault", required=True, help="vault de origem")
+    p_export.add_argument("--to-chrome",      metavar="CSV",  help="saída para Google Chrome")
+    p_export.add_argument("--to-nordpass",    metavar="CSV",  help="saída para NordPass")
+    p_export.add_argument("--to-onepassword", metavar="1PUX", help="saída para 1Password")
+    p_export.add_argument("--to-kaspersky",   metavar="TXT",  help="saída para Kaspersky")
+    p_export.set_defaults(func=cmd_export)
 
     return parser
 

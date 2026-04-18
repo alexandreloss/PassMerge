@@ -1,4 +1,4 @@
-# PassMerge - Fase 3 (Merger)
+# PassMerge - Fase 4 (Exporters)
 
 Consolidador local de credenciais entre Google/Chrome, NordPass, 1Password e
 Kaspersky Password Manager.
@@ -11,14 +11,16 @@ Kaspersky Password Manager.
 
 ## Estado desta entrega
 
-Fase 3 da arquitetura — **Merger**:
+Fase 4 da arquitetura — **Exporters**:
 
-- `core/matching.py` — chave de deduplicação por categoria (`primary_key`)
-- `core/conflict.py` — `ReviewConflict` / `ConflictLog`: apenas conflitos sem resolução automática, com todos os campos em texto claro para avaliação humana
-- `core/merger.py` — merge campo a campo com múltiplos critérios de resolução automática; complementação de campos; preservação de perdedores em `extras["_losers"]`
-- `passmerge import` unifica automaticamente ≥2 fontes e grava `vault.conflicts.json` apenas com os conflitos que exigem decisão manual
+- `exporters/base.py` — `Exporter` (ABC) + `ExportReport` (contagem, skipped, truncated, warnings)
+- `exporters/chrome.py` — CSV Google Chrome (LOGIN)
+- `exporters/nordpass.py` — CSV NordPass (LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY)
+- `exporters/kaspersky.py` — TXT Kaspersky (LOGIN → bloco `Websites`, SECURE_NOTE → bloco `Notes`)
+- `exporters/onepassword.py` — ZIP `.1pux` 1Password (todas as categorias)
+- `passmerge export` — CLI para exportar o vault para 1–4 formatos simultaneamente
 
-Fases 1 e 2 mantidas integralmente: 4 importers, schema canônico, vault JSON, wipe seguro.
+Fases 1–3 mantidas integralmente: 4 importers, schema canônico, vault JSON, merge com resolução de conflitos, comando `manual`.
 
 ## Requisitos
 
@@ -31,7 +33,7 @@ Fases 1 e 2 mantidas integralmente: 4 importers, schema canônico, vault JSON, w
 2. Importe e faça merge com `passmerge import` (múltiplas fontes são unificadas automaticamente).
 3. Se houver conflitos não resolvidos automaticamente, revise `vault.conflicts.json`, marque com `[x]` as versões escolhidas e rode `passmerge manual`.
 4. Verifique o vault com `passmerge verify` e revise o resumo com `passmerge status`.
-5. *(Fase 4)* Reexporte nos formatos nativos.
+5. Reexporte nos formatos nativos com `passmerge export`.
 6. Apague todos os arquivos intermediários com `passmerge wipe`.
 
 ## Uso
@@ -106,6 +108,26 @@ O comando:
 - Se todos os conflitos forem resolvidos, apaga o arquivo `.conflicts.json`.
 - Conflitos sem marcação ou com marcação ambígua (dois `[x]`) permanecem no log.
 
+### Exportar o vault para os formatos nativos
+
+Todos os `--to-*` são opcionais — informe ao menos um:
+
+    python -m passmerge export \
+        --vault       meu_vault.json \
+        --to-chrome      saida_chrome.csv \
+        --to-nordpass    saida_nordpass.csv \
+        --to-onepassword saida_1password.1pux \
+        --to-kaspersky   saida_kaspersky.txt
+
+Itens de categorias não suportadas pelo formato de destino são omitidos e listados no terminal (motivo: `unsupported_category`).
+
+| Destino | Flag | Formato | Categorias exportadas |
+| --- | --- | --- | --- |
+| Google Chrome | `--to-chrome` | CSV | LOGIN |
+| NordPass | `--to-nordpass` | CSV | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
+| 1Password | `--to-onepassword` | `.1pux` (ZIP + JSON) | todas |
+| Kaspersky | `--to-kaspersky` | TXT | LOGIN, SECURE_NOTE |
+
 ### Apagar um arquivo com sobrescrita segura
 
     python -m passmerge wipe --file meu_export.1pux --yes
@@ -129,9 +151,14 @@ O comando:
         nordpass.py            # NordPass CSV
         onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
         kaspersky.py           # Kaspersky TXT
+      exporters/
+        base.py                # Exporter (ABC) + ExportReport
+        chrome.py              # Google Chrome CSV
+        nordpass.py            # NordPass CSV
+        onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
+        kaspersky.py           # Kaspersky TXT
       security/
         wipe.py                # sobrescrita segura 3-pass
-      exporters/               # (Fase 4)
       report/                  # (Fase 5)
     tests/
       fixtures/
@@ -150,12 +177,17 @@ O comando:
       test_conflict.py           # ConflictLog / ReviewConflict
       test_merger.py             # 11 cenários de merge
       test_manual_cmd.py         # comando passmerge manual
+      test_exporter_chrome.py    # ChromeExporter
+      test_exporter_nordpass.py  # NordPassExporter
+      test_exporter_kaspersky.py # KasperskyExporter
+      test_exporter_onepassword.py # OnePasswordExporter
+      test_roundtrip.py          # round-trip: export → reimport → comparação
 
 ## Testes
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **196 testes, todos OK**.
+Resultado esperado: **244 testes, todos OK**.
 
 ## Merge: como funciona
 
@@ -203,14 +235,16 @@ O arquivo `<vault>.conflicts.json` contém apenas os conflitos que exigem decis�
 
 > **Atenção:** este arquivo contém senhas em texto claro. Apague-o após a revisão.
 
-## Critério de aceite (Fases 1–3)
+## Critério de aceite (Fases 1–4)
 
 **Atendido:**
 
 - Importers produzem ≥1 `CanonicalItem` por categoria suportada.
-- Merger deduplica corretamente em todos os 7 cenários de teste.
+- Merger deduplica corretamente em todos os 11 cenários de teste.
 - Conflitos resolvidos automaticamente não aparecem no log; apenas os genuínos (senhas diferentes, sem timestamps) vão para `<vault>.conflicts.json`.
 - Merge é não-destrutivo: nenhum valor é silenciosamente descartado.
+- Exporters produzem arquivos que os importers correspondentes conseguem reler com fidelidade (round-trip).
+- Itens de categorias não suportadas pelo destino são omitidos e registrados em `ExportReport.skipped_items`.
 
 ## Mudança em relação à arquitetura original
 
@@ -219,9 +253,7 @@ scrypt/Argon2id. Após revisão, optou-se por **JSON plano** porque o fluxo
 de uso é de curta duração e os arquivos de entrada já estão em texto claro.
 O módulo `security/wipe.py` garante o apagamento seguro no passo final.
 
-## Próximos passos (Fase 4)
+## Próximos passos (Fase 5)
 
-Implementar os exporters:
-
-- Reexportar vault para CSV Chrome, CSV NordPass, TXT Kaspersky e `.1pux` 1Password
-- Comando `passmerge export --target chrome --output saida.csv --vault vault.json`
+- Relatório de diferenças pré/pós-merge (`report/`)
+- Estatísticas detalhadas por fonte e categoria
