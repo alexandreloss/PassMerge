@@ -79,8 +79,11 @@ def _merge_group(
 
     def sort_key(item: CanonicalItem):
         has_ts = item.updated_at is not None
+        has_password = bool(item.fields.get("password"))
         rank = _priority_rank(_source_of(item), priority)
-        return (not has_ts, -_ts_epoch(item.updated_at), rank)
+        # Ordem de prioridade crescente (menor = melhor):
+        # 1. tem timestamp  2. epoch mais recente  3. tem senha  4. rank de fonte
+        return (not has_ts, -_ts_epoch(item.updated_at), not has_password, rank)
 
     ordered = sorted(group, key=sort_key)
     winner = ordered[0]
@@ -92,6 +95,7 @@ def _merge_group(
 
     title = winner.title
     category_str = winner.category.value
+    winner_has_password = bool(winner.fields.get("password"))
 
     all_field_keys: set[str] = set()
     for item in group:
@@ -128,6 +132,12 @@ def _merge_group(
         winner_has_ts = winner.updated_at is not None
         any_loser_has_ts = any(i.updated_at for i, _ in diverging)
         requires_review = not winner_has_ts and not any_loser_has_ts
+
+        # Se o vencedor foi eleito por ter senha e todos os perdedores divergentes
+        # não têm senha, o critério de senha já resolveu — não precisa de revisão.
+        if requires_review and winner_has_password:
+            if all(not bool(i.fields.get("password")) for i, _ in diverging):
+                requires_review = False
 
         if requires_review:
             review_fields.append(fname)

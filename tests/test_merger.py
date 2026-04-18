@@ -221,6 +221,39 @@ class TestMergeScenario7_ReviewFileHasPlaintext(unittest.TestCase):
             self.assertRegex(loser["value_hash"], r"^[0-9a-f]{64}$")
 
 
+class TestMergeScenario8_PasswordPresenceTieBreaker(unittest.TestCase):
+    """Cenário 8: sem timestamp, apenas um vault tem senha → vence sem revisão manual."""
+
+    def test_vault_with_password_wins_over_higher_priority_without(self):
+        # chrome tem prioridade baixa, mas é o único com senha
+        with_pass = _login(password="mypass", source="chrome",     updated_at=None)
+        no_pass   = _login(password="",       source="1password",  updated_at=None)
+        result = merge([[with_pass], [no_pass]])
+        self.assertEqual(result.items[0].fields["password"], "mypass")
+
+    def test_no_review_conflict_when_only_one_has_password(self):
+        with_pass = _login(password="mypass", source="chrome",    updated_at=None)
+        no_pass   = _login(password="",       source="1password", updated_at=None)
+        result = merge([[with_pass], [no_pass]])
+        self.assertEqual(len(result.conflict_log), 0)
+
+    def test_no_review_conflict_on_other_fields_when_only_one_has_password(self):
+        # username também difere, mas como só chrome tem senha, tudo é auto-resolvido
+        with_pass = _login(password="mypass", username="chrome_user", source="chrome",    updated_at=None)
+        no_pass   = _login(password="",       username="op_user",     source="1password", updated_at=None)
+        result = merge([[with_pass], [no_pass]])
+        self.assertEqual(len(result.conflict_log), 0)
+        self.assertEqual(result.items[0].fields["username"], "chrome_user")
+
+    def test_timestamp_still_beats_password_presence(self):
+        with_ts   = _login(password="",       source="1password", updated_at="2023-01-01T00:00:00+00:00")
+        with_pass = _login(password="mypass", source="chrome",    updated_at=None)
+        result = merge([[with_ts], [with_pass]])
+        # 1password vence por timestamp mesmo sem senha; password é complementado
+        self.assertEqual(result.items[0].fields["password"], "mypass")
+        self.assertEqual(len(result.conflict_log), 0)
+
+
 class TestMergeStats(unittest.TestCase):
     def test_single_source_no_merge(self):
         item = _login(source="1password")
