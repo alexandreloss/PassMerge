@@ -24,7 +24,7 @@ from .canonical import CanonicalItem, Category, SourceRef
 from .conflict import ConflictLog, ReviewConflict
 from .matching import primary_key
 
-_DEFAULT_PRIORITY = ["1password", "nordpass", "kaspersky", "chrome"]
+_DEFAULT_PRIORITY = ["nordpass", "1password", "chrome", "kaspersky"]
 
 _META_FIELDS = {"urls_additional"}
 
@@ -97,9 +97,13 @@ def _merge_group(
     category_str = winner.category.value
     winner_has_password = bool(winner.fields.get("password"))
 
-    # Todos os itens do grupo têm a mesma senha não-vazia?
-    group_passwords = [item.fields.get("password") or "" for item in group]
-    same_nonempty_password = len(set(group_passwords)) == 1 and bool(group_passwords[0])
+    # Vaults com senha preenchida têm todos a mesma senha?
+    # Ignora vaults sem senha (eles são filtrados antes da resolução de conflito).
+    pw_items = [item for item in group if bool(item.fields.get("password"))]
+    same_nonempty_password = (
+        len(pw_items) >= 2
+        and len({item.fields.get("password") for item in pw_items}) == 1
+    )
 
     all_field_keys: set[str] = set()
     for item in group:
@@ -133,6 +137,14 @@ def _merge_group(
         diverging = [(item, v) for item, v in loser_vals if v and v != winner_val]
         if not diverging:
             continue
+
+        # Quando o vencedor tem senha, descarta perdedores sem senha do conflito.
+        # Aplica-se só quando ao menos um perdedor divergente também tem senha;
+        # caso contrário a regra de "só vencedor tem senha" já resolve abaixo.
+        if winner_has_password:
+            pw_diverging = [(i, v) for i, v in diverging if bool(i.fields.get("password"))]
+            if pw_diverging:
+                diverging = pw_diverging
 
         winner_has_ts = winner.updated_at is not None
         any_loser_has_ts = any(i.updated_at for i, _ in diverging)
@@ -170,6 +182,7 @@ def _merge_group(
                 {
                     "source": _source_of(item),
                     "updated_at": item.updated_at,
+                    "escolhido": "[]",
                     "fields": dict(item.fields),
                 }
                 for item in group

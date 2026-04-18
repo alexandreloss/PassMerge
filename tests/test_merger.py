@@ -96,8 +96,8 @@ class TestMergeScenario3_NoPriorityConflict(unittest.TestCase):
         self.item = self.result.items[0]
 
     def test_winner_by_priority(self):
-        # 1password tem prioridade maior
-        self.assertEqual(self.item.fields["password"], "oppass")
+        # nordpass tem prioridade maior agora
+        self.assertEqual(self.item.fields["password"], "nordpass")
 
     def test_conflict_logged_for_review(self):
         self.assertEqual(len(self.result.conflict_log), 1)
@@ -118,17 +118,18 @@ class TestMergeScenario3_NoPriorityConflict(unittest.TestCase):
 
     def test_loser_in_extras(self):
         losers = self.item.extras.get("_losers", [])
-        self.assertTrue(any(l["source"] == "nordpass" and l["field"] == "password"
+        # nordpass vence agora; 1password é o perdedor
+        self.assertTrue(any(l["source"] == "1password" and l["field"] == "password"
                             for l in losers))
 
     def test_loser_value_is_hash_not_plaintext(self):
         losers = self.item.extras.get("_losers", [])
-        nord_loser = next(l for l in losers if l["source"] == "nordpass")
+        op_loser = next(l for l in losers if l["source"] == "1password")
         self.assertEqual(
-            nord_loser["value_hash"],
-            hashlib.sha256("nordpass".encode()).hexdigest(),
+            op_loser["value_hash"],
+            hashlib.sha256("oppass".encode()).hexdigest(),
         )
-        self.assertNotIn("nordpass", str(nord_loser.get("value_hash", "")))
+        self.assertNotIn("oppass", str(op_loser.get("value_hash", "")))
 
 
 class TestMergeScenario4_ThreeSources(unittest.TestCase):
@@ -264,11 +265,12 @@ class TestMergeScenario9_SamePassword(unittest.TestCase):
         self.assertEqual(len(result.conflict_log), 0)
 
     def test_priority_decides_when_same_password(self):
-        op   = _login(password="shared", username="alice_op",   source="1password", updated_at=None)
-        nord = _login(password="shared", username="alice_nord", source="nordpass",  updated_at=None)
+        # Mesma conta (mesmo username/url → mesma primary_key), mesma senha,
+        # campo extra diverge → nordpass vence por prioridade
+        op   = _login(password="shared", source="1password", updated_at=None, extra="op_val")
+        nord = _login(password="shared", source="nordpass",  updated_at=None, extra="nord_val")
         result = merge([[op], [nord]])
-        # 1password tem maior prioridade
-        self.assertEqual(result.items[0].fields["username"], "alice_op")
+        self.assertEqual(result.items[0].fields["extra"], "nord_val")
 
     def test_different_passwords_still_requires_review(self):
         op   = _login(password="pass1", source="1password", updated_at=None)
@@ -277,7 +279,46 @@ class TestMergeScenario9_SamePassword(unittest.TestCase):
         self.assertGreater(len(result.conflict_log), 0)
 
 
-class TestMergeScenario10_ComplementationAlwaysApplies(unittest.TestCase):
+class TestMergeScenario10_IgnoreBlankPasswordVaultsInConflict(unittest.TestCase):
+    """Cenário 10: em conflitos multi-vault, vaults sem senha são ignorados na resolução."""
+
+    def test_blank_password_vault_ignored_in_three_way_conflict(self):
+        # 1password e nordpass têm senhas diferentes; chrome não tem senha
+        # Apenas 1password vs nordpass devem ser considerados
+        op   = _login(password="pass_op",   username="alice", source="1password", updated_at=None)
+        nord = _login(password="pass_nord", username="alice", source="nordpass",  updated_at=None)
+        chrome = _login(password="",        username="alice", source="chrome",    updated_at=None)
+        result = merge([[op], [nord], [chrome]])
+        # Conflito genuíno entre op e nord (senhas diferentes) → revisão necessária
+        self.assertGreater(len(result.conflict_log), 0)
+        entry = list(result.conflict_log)[0]
+        # chrome (sem senha) não deve estar nos conflicting versions considerados
+        # o winner foi eleito por prioridade entre os que têm senha
+        sources_with_conflict = {v["source"] for v in entry.versions if bool(v["fields"].get("password"))}
+        self.assertIn("1password", sources_with_conflict)
+        self.assertIn("nordpass", sources_with_conflict)
+
+    def test_only_one_vault_has_password_among_three_no_conflict(self):
+        # Apenas 1password tem senha → vence sem revisão, outros são ignorados
+        # username default igual nos três → mesma primary_key → agrupados
+        op     = _login(password="secret", source="1password", updated_at=None)
+        nord   = _login(password="",       source="nordpass",  updated_at=None)
+        chrome = _login(password="",       source="chrome",    updated_at=None)
+        result = merge([[op], [nord], [chrome]])
+        self.assertEqual(len(result.conflict_log), 0)
+        self.assertEqual(result.items[0].fields["password"], "secret")
+
+    def test_same_password_among_password_vaults_no_conflict(self):
+        # 1password e nordpass têm mesma senha; chrome não tem → sem revisão
+        # username default igual nos três → mesma primary_key → agrupados
+        op     = _login(password="shared", source="1password", updated_at=None)
+        nord   = _login(password="shared", source="nordpass",  updated_at=None)
+        chrome = _login(password="",       source="chrome",    updated_at=None)
+        result = merge([[op], [nord], [chrome]])
+        self.assertEqual(len(result.conflict_log), 0)
+
+
+class TestMergeScenario11_ComplementationAlwaysApplies(unittest.TestCase):
     """Cenário 10: campos únicos dos perdedores sempre enriquecem o registro final.
 
     Nota: o matching de LOGINs usa domínio da URL + username como chave primária.

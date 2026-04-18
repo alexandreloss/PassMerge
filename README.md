@@ -14,9 +14,9 @@ Kaspersky Password Manager.
 Fase 3 da arquitetura — **Merger**:
 
 - `core/matching.py` — chave de deduplicação por categoria (`primary_key`)
-- `core/conflict.py` — log de conflitos em JSONL, sem valores em texto claro (só SHA-256)
-- `core/merger.py` — merge campo a campo: timestamp → fonte rica → prioridade; complementação; preservação de perdedores em `extras["_losers"]`
-- `passmerge import` unifica automaticamente ≥2 fontes e grava `vault.conflicts.jsonl` se houver conflitos
+- `core/conflict.py` — `ReviewConflict` / `ConflictLog`: apenas conflitos sem resolução automática, com todos os campos em texto claro para avaliação humana
+- `core/merger.py` — merge campo a campo com múltiplos critérios de resolução automática; complementação de campos; preservação de perdedores em `extras["_losers"]`
+- `passmerge import` unifica automaticamente ≥2 fontes e grava `vault.conflicts.json` apenas com os conflitos que exigem decisão manual
 
 Fases 1 e 2 mantidas integralmente: 4 importers, schema canônico, vault JSON, wipe seguro.
 
@@ -29,7 +29,7 @@ Fases 1 e 2 mantidas integralmente: 4 importers, schema canônico, vault JSON, w
 
 1. Exporte as senhas de cada gerenciador (gera CSV/TXT/1PUX em texto claro).
 2. Importe e faça merge com `passmerge import` (múltiplas fontes são unificadas automaticamente).
-3. Se houver conflitos, revise `vault.conflicts.jsonl` (campos sensíveis nunca aparecem em texto claro).
+3. Se houver conflitos não resolvidos automaticamente, revise `vault.conflicts.json`, marque com `[x]` as versões escolhidas e rode `passmerge manual`.
 4. Verifique o vault com `passmerge verify` e revise o resumo com `passmerge status`.
 5. *(Fase 4)* Reexporte nos formatos nativos.
 6. Apague todos os arquivos intermediários com `passmerge wipe`.
@@ -83,6 +83,29 @@ python -m passmerge import --onepassword C:\Users\Alexandre\Senhas\1Password.1pu
 
     python -m passmerge verify --vault meu_vault.json
 
+### Resolver conflitos manualmente
+
+Após revisar `vault.conflicts.json`, marque a versão escolhida trocando `"escolhido": "[]"` por `"escolhido": "[x]"` em exatamente uma versão de cada conflito:
+
+```json
+{
+  "source": "nordpass",
+  "updated_at": null,
+  "escolhido": "[x]",
+  "fields": { "username": "alice", "password": "minha_senha" }
+}
+```
+
+Depois aplique as escolhas ao vault:
+
+    python -m passmerge manual --vault meu_vault.json --log meu_vault.conflicts.json
+
+O comando:
+- Atualiza os campos conflitantes no vault com os valores da versão marcada.
+- Remove do log os conflitos resolvidos.
+- Se todos os conflitos forem resolvidos, apaga o arquivo `.conflicts.json`.
+- Conflitos sem marcação ou com marcação ambígua (dois `[x]`) permanecem no log.
+
 ### Apagar um arquivo com sobrescrita segura
 
     python -m passmerge wipe --file meu_export.1pux --yes
@@ -98,7 +121,7 @@ python -m passmerge import --onepassword C:\Users\Alexandre\Senhas\1Password.1pu
         categories.py          # mapeamento canônico ↔ nativo (4 gerenciadores)
         normalize.py           # normalize_url, normalize_email, normalize_phone
         matching.py            # primary_key por categoria (deduplicação)
-        conflict.py            # ConflictLog, ConflictEntry (JSONL, sem plaintext)
+        conflict.py            # ConflictLog, ReviewConflict (JSON formatado, com plaintext para revisão humana)
         merger.py              # merge(), MergeResult, MergeStats
       importers/
         base.py                # classe abstrata Importer
@@ -124,14 +147,15 @@ python -m passmerge import --onepassword C:\Users\Alexandre\Senhas\1Password.1pu
       test_importer_onepassword.py
       test_importer_kaspersky.py
       test_matching.py           # chaves de deduplicação por categoria
-      test_conflict.py           # ConflictLog / ConflictEntry
-      test_merger.py             # 7 cenários de merge
+      test_conflict.py           # ConflictLog / ReviewConflict
+      test_merger.py             # 11 cenários de merge
+      test_manual_cmd.py         # comando passmerge manual
 
 ## Testes
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **182 testes, todos OK**.
+Resultado esperado: **196 testes, todos OK**.
 
 ## Merge: como funciona
 
@@ -139,21 +163,45 @@ Quando `passmerge import` recebe ≥2 fontes, o merger:
 
 1. Agrupa itens por `(category, primary_key)` — chave canônica por categoria.
 2. **Grupos com 1 item** → passam direto.
-3. **Grupos com >1 item** → resolve campo a campo:
-   - Timestamp mais recente vence.
-   - Item com timestamp vence item sem timestamp.
-   - Sem timestamp e valores divergem → prioridade (`1password > nordpass > kaspersky > chrome`); conflito marcado `requires_review=True`.
-4. **Complementação:** campos vazios no vencedor são preenchidos por outros itens do grupo.
-5. **Preservação:** valores perdedores ficam em `extras["_losers"]` (com SHA-256, nunca em texto claro).
-6. **Log de conflitos** gravado em `<vault>.conflicts.jsonl`.
+3. **Grupos com >1 item** → elege vencedor e resolve campo a campo:
 
+   **Critérios de eleição do vencedor** (ordem decrescente de prioridade):
+   - Timestamp mais recente.
+   - Tem timestamp vs. não tem.
+   - Tem senha preenchida vs. sem senha.
+   - Prioridade de fonte: `nordpass > 1password > chrome > kaspersky`.
+
+   **Resolução automática de conflito de campo** (sem gerar entrada no log):
+   - Vencedor ou perdedor tem timestamp → timestamp decide.
+   - Todos os vaults com senha preenchida têm a mesma senha → prioridade de fonte decide.
+   - Vencedor tem senha e todos os perdedores divergentes não têm senha → vencedor decide.
+   - Em conflito multi-vault: vaults com senha em branco são excluídos antes da comparação; se restar só um lado com senha → resolvido automaticamente.
+
+   **Conflito genuíno** (vai para `<vault>.conflicts.json`): sem timestamps, múltiplos vaults com senhas diferentes e divergentes.
+
+4. **Complementação:** campos ausentes no vencedor são preenchidos por campos presentes nos perdedores, inclusive os descartados na resolução de conflito.
+5. **Preservação:** valores perdedores ficam em `extras["_losers"]` (com SHA-256, sem texto claro).
 
 ### Revisar conflitos
 
-    cat meu_vault.conflicts.jsonl | python -m json.tool
+O arquivo `<vault>.conflicts.json` contém apenas os conflitos que exigem decisão manual, em JSON formatado e legível:
 
-Cada linha tem: `conflict_id`, `item_title`, `field`, `candidates` (com `value_hash` SHA-256),
-`auto_resolution`, `requires_review`.
+```json
+[
+  {
+    "conflict_id": "...",
+    "item_title": "GitHub",
+    "category": "login",
+    "conflicting_fields": ["password"],
+    "versions": [
+      { "source": "1password", "updated_at": null, "fields": { "username": "alice", "password": "pass1" } },
+      { "source": "nordpass",  "updated_at": null, "fields": { "username": "alice", "password": "pass2" } }
+    ]
+  }
+]
+```
+
+> **Atenção:** este arquivo contém senhas em texto claro. Apague-o após a revisão.
 
 ## Critério de aceite (Fases 1–3)
 
@@ -161,7 +209,7 @@ Cada linha tem: `conflict_id`, `item_title`, `field`, `candidates` (com `value_h
 
 - Importers produzem ≥1 `CanonicalItem` por categoria suportada.
 - Merger deduplica corretamente em todos os 7 cenários de teste.
-- Campos sensíveis (password, etc.) nunca aparecem em texto claro no log.
+- Conflitos resolvidos automaticamente não aparecem no log; apenas os genuínos (senhas diferentes, sem timestamps) vão para `<vault>.conflicts.json`.
 - Merge é não-destrutivo: nenhum valor é silenciosamente descartado.
 
 ## Mudança em relação à arquitetura original

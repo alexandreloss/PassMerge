@@ -1,28 +1,23 @@
-"""CLI do PassMerge - Fase 2 (importers + vault em JSON plano).
-
-O vault e armazenado como .json em texto claro (UTF-8). Responsabilidade
-do usuario proteger/apagar o arquivo apos o uso. O modulo security/wipe.py
-fica disponivel para apagamento seguro opcional.
+"""CLI do PassMerge.
 
 Comandos implementados:
-    passmerge init    --vault PATH          cria vault.json vazio
-    passmerge status  --vault PATH          exibe resumo
-    passmerge verify  --vault PATH          valida schema
-    passmerge wipe    --file  PATH          sobrescreve e remove (util para CSVs)
-    passmerge import  [--chrome X.csv]
-                      [--nordpass Y.csv]
-                      [--onepassword Z.1pux]
-                      [--kaspersky W.txt]
-                      --vault out.json      importa arquivos para o vault
+    passmerge init    --vault PATH
+    passmerge status  --vault PATH
+    passmerge verify  --vault PATH
+    passmerge wipe    --file  PATH --yes
+    passmerge import  [--chrome X.csv] [--nordpass Y.csv]
+                      [--onepassword Z.1pux] [--kaspersky W.txt]
+                      --vault out.json
+    passmerge manual  --vault out.json --log out.conflicts.json
 
-Comandos planejados (Fases 3+):
-    passmerge export ...      (F4)
-    passmerge resolve ...     (F5)
+Comandos planejados (Fase 4+):
+    passmerge export ...
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -203,6 +198,86 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_manual(args: argparse.Namespace) -> int:
+    vault_path = Path(args.vault)
+    log_path = Path(args.log)
+
+    if not log_path.exists():
+        print(f"ERRO: arquivo de conflitos não encontrado: {log_path}", file=sys.stderr)
+        return 1
+
+    vault = _load_vault(vault_path)
+
+    try:
+        conflicts = json.loads(log_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"ERRO: log de conflitos inválido ({exc})", file=sys.stderr)
+        return 1
+
+    resolved_count = 0
+    remaining = []
+
+    for conflict in conflicts:
+        versions = conflict.get("versions", [])
+        chosen = [v for v in versions if v.get("escolhido") == "[x]"]
+
+        if len(chosen) == 0:
+            remaining.append(conflict)
+            continue
+
+        if len(chosen) > 1:
+            print(f"  AVISO: '{conflict['item_title']}' tem {len(chosen)} versões marcadas — ignorado.")
+            remaining.append(conflict)
+            continue
+
+        chosen_version = chosen[0]
+        title = conflict["item_title"]
+        category = conflict["category"]
+        conflicting_fields = conflict.get("conflicting_fields", [])
+
+        matching = [i for i in vault.items
+                    if i.title == title and i.category.value == category]
+
+        if not matching:
+            print(f"  AVISO: '{title}' ({category}) não encontrado no vault — ignorado.")
+            remaining.append(conflict)
+            continue
+
+        if len(matching) > 1:
+            print(f"  AVISO: '{title}' ({category}) tem {len(matching)} entradas no vault — ignorado.")
+            remaining.append(conflict)
+            continue
+
+        item = matching[0]
+        chosen_fields = chosen_version.get("fields", {})
+        for field in conflicting_fields:
+            if field in chosen_fields:
+                item.fields[field] = chosen_fields[field]
+
+        resolved_count += 1
+        print(f"  OK: '{title}' — {len(conflicting_fields)} campo(s) de [{chosen_version['source']}]")
+
+    if resolved_count == 0:
+        print("Nenhum conflito marcado com [x] encontrado.")
+        return 0
+
+    _save_vault(vault, vault_path)
+
+    if remaining:
+        log_path.write_text(
+            json.dumps(remaining, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"OK: {resolved_count} conflito(s) resolvido(s). "
+              f"{len(remaining)} restante(s) em {log_path.name}")
+    else:
+        log_path.unlink()
+        print(f"OK: {resolved_count} conflito(s) resolvido(s). "
+              f"Todos resolvidos — {log_path.name} removido.")
+
+    return 0
+
+
 # ---------- parser ----------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -251,11 +326,17 @@ def build_parser() -> argparse.ArgumentParser:
                           help="vault de destino (criado se nao existir)")
     p_import.set_defaults(func=cmd_import)
 
-    # Placeholder para fases futuras
-    for future_cmd in ("export", "resolve"):
-        ph = sub.add_parser(future_cmd,
-                            help="[nao implementado ainda]")
-        ph.set_defaults(func=_not_implemented)
+    p_manual = sub.add_parser(
+        "manual",
+        help="aplica resoluções manuais de conflito marcadas com [x] no log",
+    )
+    p_manual.add_argument("--vault", required=True, help="vault a atualizar")
+    p_manual.add_argument("--log",   required=True,
+                          help="arquivo de conflitos gerado pelo import (ex.: vault.conflicts.json)")
+    p_manual.set_defaults(func=cmd_manual)
+
+    p_export = sub.add_parser("export", help="[não implementado ainda]")
+    p_export.set_defaults(func=_not_implemented)
 
     return parser
 
