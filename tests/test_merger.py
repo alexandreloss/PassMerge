@@ -254,6 +254,65 @@ class TestMergeScenario8_PasswordPresenceTieBreaker(unittest.TestCase):
         self.assertEqual(len(result.conflict_log), 0)
 
 
+class TestMergeScenario9_SamePassword(unittest.TestCase):
+    """Cenário 9: vaults com mesma senha → conflito em outros campos é auto-resolvido por prioridade."""
+
+    def test_no_review_conflict_when_same_password(self):
+        op   = _login(password="shared", username="alice_op",   source="1password", updated_at=None)
+        nord = _login(password="shared", username="alice_nord", source="nordpass",  updated_at=None)
+        result = merge([[op], [nord]])
+        self.assertEqual(len(result.conflict_log), 0)
+
+    def test_priority_decides_when_same_password(self):
+        op   = _login(password="shared", username="alice_op",   source="1password", updated_at=None)
+        nord = _login(password="shared", username="alice_nord", source="nordpass",  updated_at=None)
+        result = merge([[op], [nord]])
+        # 1password tem maior prioridade
+        self.assertEqual(result.items[0].fields["username"], "alice_op")
+
+    def test_different_passwords_still_requires_review(self):
+        op   = _login(password="pass1", source="1password", updated_at=None)
+        nord = _login(password="pass2", source="nordpass",  updated_at=None)
+        result = merge([[op], [nord]])
+        self.assertGreater(len(result.conflict_log), 0)
+
+
+class TestMergeScenario10_ComplementationAlwaysApplies(unittest.TestCase):
+    """Cenário 10: campos únicos dos perdedores sempre enriquecem o registro final.
+
+    Nota: o matching de LOGINs usa domínio da URL + username como chave primária.
+    Para serem agrupados, os itens devem ter o mesmo domínio (ou ambos sem URL).
+    """
+
+    def test_password_from_winner_otp_from_loser(self):
+        # Mesma URL (mesmo domínio → mesma chave), 1password tem senha, chrome tem OTP
+        op     = _login(password="secret", source="1password", updated_at=None)
+        chrome = _login(password="",       source="chrome",    updated_at=None,
+                        otp="otpauth://totp/GitHub?secret=ABC")
+        result = merge([[op], [chrome]])
+        item = result.items[0]
+        self.assertEqual(item.fields["password"], "secret")
+        self.assertEqual(item.fields["otp"], "otpauth://totp/GitHub?secret=ABC")
+        self.assertEqual(len(result.conflict_log), 0)
+
+    def test_extra_fields_complemented_when_same_password(self):
+        # Mesma senha + mesmo domínio → sem conflito; campo extra do perdedor é herdado
+        op   = _login(password="shared", source="1password", updated_at=None)
+        nord = _login(password="shared", source="nordpass",  updated_at=None,
+                      notes_field="nota importante")
+        result = merge([[op], [nord]])
+        item = result.items[0]
+        self.assertEqual(item.fields.get("notes_field"), "nota importante")
+        self.assertEqual(len(result.conflict_log), 0)
+
+    def test_complementation_counted_in_stats(self):
+        op     = _login(password="secret", source="1password", updated_at=None)
+        chrome = _login(password="",       source="chrome",    updated_at=None,
+                        otp="otpauth://totp/GitHub?secret=ABC")
+        result = merge([[op], [chrome]])
+        self.assertGreater(result.stats.fields_complemented, 0)
+
+
 class TestMergeStats(unittest.TestCase):
     def test_single_source_no_merge(self):
         item = _login(source="1password")

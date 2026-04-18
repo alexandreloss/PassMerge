@@ -97,6 +97,10 @@ def _merge_group(
     category_str = winner.category.value
     winner_has_password = bool(winner.fields.get("password"))
 
+    # Todos os itens do grupo têm a mesma senha não-vazia?
+    group_passwords = [item.fields.get("password") or "" for item in group]
+    same_nonempty_password = len(set(group_passwords)) == 1 and bool(group_passwords[0])
+
     all_field_keys: set[str] = set()
     for item in group:
         all_field_keys.update(item.fields.keys())
@@ -106,6 +110,7 @@ def _merge_group(
 
     for fname in sorted(all_field_keys):
         winner_val = merged_fields.get(fname) or ""
+        # Complementação: campos ausentes no vencedor são preenchidos pelos perdedores
         loser_vals = [(item, item.fields.get(fname) or "") for item in losers]
 
         if not winner_val:
@@ -133,8 +138,12 @@ def _merge_group(
         any_loser_has_ts = any(i.updated_at for i, _ in diverging)
         requires_review = not winner_has_ts and not any_loser_has_ts
 
-        # Se o vencedor foi eleito por ter senha e todos os perdedores divergentes
-        # não têm senha, o critério de senha já resolveu — não precisa de revisão.
+        # Mesma senha em todos os vaults → resolvido por prioridade de fonte.
+        if requires_review and same_nonempty_password:
+            requires_review = False
+
+        # Vencedor eleito por ter senha e todos os perdedores divergentes não têm
+        # senha → critério de senha já resolveu.
         if requires_review and winner_has_password:
             if all(not bool(i.fields.get("password")) for i, _ in diverging):
                 requires_review = False
