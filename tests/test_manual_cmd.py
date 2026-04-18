@@ -156,6 +156,40 @@ class TestManualCommand(unittest.TestCase):
             remaining = json.loads(log_path.read_text(encoding="utf-8"))
             self.assertEqual(len(remaining), 1)
 
+    def test_multiple_vault_entries_adds_new_item(self):
+        """Múltiplas entradas legítimas com mesmo título → adiciona nova entrada."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vault_path = Path(tmp) / "vault.json"
+            log_path   = Path(tmp) / "vault.conflicts.json"
+
+            # Dois itens legítimos com mesmo título mas URLs diferentes
+            item_a = _login(title="MeuSite", username="alice")
+            item_b = _login(title="MeuSite", username="bob")
+            vault = _make_vault([item_a, item_b])
+            vault_path.write_text(vault.to_json(indent=2), encoding="utf-8")
+
+            conflict = _conflict(
+                title="MeuSite", category="login",
+                fields_a={"username": "carol", "password": "carolpass"},
+                source_a="nordpass", chosen_a=True,
+                fields_b={"username": "carol", "password": "oldpass"},
+                source_b="chrome",
+            )
+            conflict["conflicting_fields"] = ["password"]
+            log_path.write_text(json.dumps([conflict], ensure_ascii=False, indent=2),
+                                encoding="utf-8")
+
+            rc = self._run(vault_path, log_path)
+            self.assertEqual(rc, 0)
+
+            from passmerge.core.canonical import Vault as V
+            updated = V.from_bytes(vault_path.read_bytes())
+            # Deve ter 3 itens agora (2 originais + 1 novo)
+            self.assertEqual(len(updated.items), 3)
+            new_item = next(i for i in updated.items if i.fields.get("username") == "carol")
+            self.assertEqual(new_item.fields["password"], "carolpass")
+            self.assertFalse(log_path.exists())
+
     def test_missing_log_returns_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault_path = Path(tmp) / "vault.json"

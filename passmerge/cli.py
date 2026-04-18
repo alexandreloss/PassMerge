@@ -243,13 +243,31 @@ def cmd_manual(args: argparse.Namespace) -> int:
             remaining.append(conflict)
             continue
 
+        chosen_fields = chosen_version.get("fields", {})
+
         if len(matching) > 1:
-            print(f"  AVISO: '{title}' ({category}) tem {len(matching)} entradas no vault — ignorado.")
-            remaining.append(conflict)
+            # Múltiplas entradas legítimas com mesmo título/categoria —
+            # adiciona a versão escolhida como nova entrada no vault.
+            from .core.canonical import CanonicalItem, Category, SourceRef
+            try:
+                cat = Category(category)
+            except ValueError:
+                print(f"  AVISO: categoria inválida '{category}' em '{title}' — ignorado.")
+                remaining.append(conflict)
+                continue
+            new_item = CanonicalItem(
+                category=cat,
+                title=title,
+                fields=dict(chosen_fields),
+                sources=[SourceRef(source=chosen_version["source"], source_id="manual")],
+                updated_at=chosen_version.get("updated_at"),
+            )
+            vault.items.append(new_item)
+            resolved_count += 1
+            print(f"  OK: '{title}' — novo item adicionado de [{chosen_version['source']}]")
             continue
 
         item = matching[0]
-        chosen_fields = chosen_version.get("fields", {})
         for field in conflicting_fields:
             if field in chosen_fields:
                 item.fields[field] = chosen_fields[field]
