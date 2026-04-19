@@ -90,12 +90,13 @@ class TestNordPassExporter(unittest.TestCase):
         self.assertEqual(rows[0]["email"], "alice@example.com")
         self.assertEqual(rows[0]["type"], "identity")
 
-    def test_unsupported_category_skipped(self):
+    def test_other_category_exported_as_login(self):
         content, report = self._export([_login(), _server()])
         rows = list(csv.DictReader(content.splitlines()))
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(len(report.skipped_items), 1)
-        self.assertEqual(report.skipped_items[0]["reason"], "unsupported_category")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(report.skipped_items), 0)
+        server_row = next(r for r in rows if r["name"] == "My Server")
+        self.assertEqual(server_row["type"], "password")
 
     def test_all_columns_present(self):
         content, _ = self._export([_login()])

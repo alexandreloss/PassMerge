@@ -151,15 +151,17 @@ class TestNordPassRoundTrip(unittest.TestCase):
         self.assertIn(Category.CREDIT_CARD, cats)
         self.assertIn(Category.SECURE_NOTE, cats)
 
-    def test_unsupported_skipped(self):
+    def test_unsupported_exported_as_login(self):
         items = [_login(), _server()]
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "nordpass.csv"
             report = NordPassExporter().export(items, out)
             reimported = NordPassImporter().parse(out)
 
-        self.assertEqual(len(reimported), 1)
-        self.assertEqual(len(report.skipped_items), 1)
+        self.assertEqual(len(reimported), 2)
+        self.assertEqual(len(report.skipped_items), 0)
+        cats = {i.category for i in reimported}
+        self.assertIn(Category.LOGIN, cats)
 
 
 class TestKasperskyRoundTrip(unittest.TestCase):

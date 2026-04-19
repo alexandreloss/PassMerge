@@ -16,21 +16,27 @@ _COLUMNS = [
 ]
 
 
+def _effective_category(category: Category) -> Category:
+    """Categorias sem mapeamento nativo no NordPass são tratadas como LOGIN."""
+    return category if category in CANONICAL_TO_NORDPASS else Category.LOGIN
+
+
 def _row_for(item: CanonicalItem) -> dict[str, str]:
     f = item.fields
+    eff = _effective_category(item.category)
     base: dict[str, str] = {
         "name": item.title,
         "folder": item.folder or "",
-        "type": CANONICAL_TO_NORDPASS.get(item.category, ""),
+        "type": CANONICAL_TO_NORDPASS[eff],
     }
 
-    if item.category == Category.LOGIN:
+    if eff == Category.LOGIN:
         base["url"] = f.get("url") or ""
         base["username"] = f.get("username") or ""
         base["password"] = f.get("password") or ""
         base["note"] = item.notes or ""
 
-    elif item.category == Category.CREDIT_CARD:
+    elif eff == Category.CREDIT_CARD:
         base["cardholder"] = f.get("cardholder") or ""
         base["cardnumber"] = f.get("number") or ""
         base["cvc"] = f.get("cvv") or ""
@@ -38,10 +44,10 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["zipcode"] = f.get("zip") or ""
         base["note"] = item.notes or ""
 
-    elif item.category == Category.SECURE_NOTE:
+    elif eff == Category.SECURE_NOTE:
         base["note"] = f.get("body") or ""
 
-    elif item.category == Category.IDENTITY:
+    elif eff == Category.IDENTITY:
         base["full_name"] = f.get("first_name") or ""
         base["email"] = f.get("email") or ""
         base["phone_number"] = f.get("phone") or ""
@@ -56,7 +62,8 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
 
 class NordPassExporter(Exporter):
     target_name = "nordpass"
-    supported_categories = set(CANONICAL_TO_NORDPASS.keys())
+    # Todas as categorias são suportadas — as sem mapeamento nativo viram LOGIN.
+    supported_categories = set(Category)
 
     def export(self, items: list[CanonicalItem], out_path: Path) -> ExportReport:
         report = ExportReport(target=self.target_name)
@@ -68,11 +75,7 @@ class NordPassExporter(Exporter):
             )
             writer.writeheader()
             for item in items:
-                if item.category not in self.supported_categories:
-                    report.skip(item, "unsupported_category")
-                    continue
                 row = _row_for(item)
-                # Fill missing columns with empty string
                 for col in _COLUMNS:
                     row.setdefault(col, "")
                 writer.writerow(row)
