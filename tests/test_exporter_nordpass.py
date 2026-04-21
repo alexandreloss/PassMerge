@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from passmerge.core.canonical import CanonicalItem, Category, SourceRef
-from passmerge.exporters.nordpass import NordPassExporter
+from passmerge.exporters.nordpass import NordPassExporter, _COLUMNS
 
 
 def _login(title="GitHub", username="alice", password="pass1") -> CanonicalItem:
@@ -67,28 +67,24 @@ class TestNordPassExporter(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "GitHub")
         self.assertEqual(rows[0]["username"], "alice")
-        self.assertEqual(rows[0]["type"], "password")
         self.assertEqual(report.exported_count, 1)
 
     def test_credit_card_exported(self):
         content, report = self._export([_card()])
         rows = list(csv.DictReader(content.splitlines()))
-        self.assertEqual(rows[0]["cardholder"], "Alice")
+        self.assertEqual(rows[0]["cardholdername"], "Alice")
         self.assertEqual(rows[0]["cardnumber"], "4111111111111111")
-        self.assertEqual(rows[0]["type"], "credit_card")
 
     def test_secure_note_exported(self):
         content, report = self._export([_note()])
         rows = list(csv.DictReader(content.splitlines()))
         self.assertEqual(rows[0]["note"], "secret text")
-        self.assertEqual(rows[0]["type"], "note")
 
     def test_identity_exported(self):
         content, report = self._export([_identity()])
         rows = list(csv.DictReader(content.splitlines()))
         self.assertEqual(rows[0]["full_name"], "Alice")
         self.assertEqual(rows[0]["email"], "alice@example.com")
-        self.assertEqual(rows[0]["type"], "identity")
 
     def test_other_category_exported_as_login(self):
         content, report = self._export([_login(), _server()])
@@ -96,14 +92,29 @@ class TestNordPassExporter(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(len(report.skipped_items), 0)
         server_row = next(r for r in rows if r["name"] == "My Server")
-        self.assertEqual(server_row["type"], "password")
+        # sem type → passa como login (username/password preenchidos)
+        self.assertEqual(server_row["username"], "root")
 
-    def test_all_columns_present(self):
+    def test_official_columns_present(self):
         content, _ = self._export([_login()])
         header = content.splitlines()[0]
-        for col in ["name", "url", "username", "password", "note", "type",
-                    "cardholder", "cardnumber"]:
+        for col in _COLUMNS:
             self.assertIn(col, header)
+
+    def test_no_type_column(self):
+        content, _ = self._export([_login()])
+        header = content.splitlines()[0]
+        self.assertNotIn('"type"', header)
+
+    def test_totp_exported(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="GitHub",
+            fields={"username": "alice", "password": "pass", "otp": "otpauth://totp/x"},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["totp"], "otpauth://totp/x")
 
     def test_unicode_preserved(self):
         content, _ = self._export([_login(username="usuário", password="sênha")])

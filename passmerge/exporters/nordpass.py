@@ -1,68 +1,77 @@
-"""Exporter para o formato CSV do NordPass."""
+"""Exporter para o formato CSV do NordPass.
+
+Segue o template oficial de import do NordPass::
+
+    name,url,username,password,note,cardholdername,cardnumber,cvc,expirydate,
+    zipcode,folder,full_name,phone_number,email,address1,address2,city,
+    country,state,totp,shared_folder
+"""
 from __future__ import annotations
 
 import csv
 from pathlib import Path
 
 from ..core.canonical import CanonicalItem, Category
-from ..core.categories import CANONICAL_TO_NORDPASS
 from .base import ExportReport, Exporter
 
+# Colunas na ordem exata do template oficial do NordPass
 _COLUMNS = [
     "name", "url", "username", "password", "note",
-    "cardholder", "cardnumber", "cvc", "expirydate", "zipcode",
+    "cardholdername", "cardnumber", "cvc", "expirydate", "zipcode",
     "folder", "full_name", "phone_number", "email",
-    "address1", "address2", "city", "country", "state", "type",
+    "address1", "address2", "city", "country", "state",
+    "totp", "shared_folder",
 ]
-
-
-def _effective_category(category: Category) -> Category:
-    """Categorias sem mapeamento nativo no NordPass são tratadas como LOGIN."""
-    return category if category in CANONICAL_TO_NORDPASS else Category.LOGIN
 
 
 def _row_for(item: CanonicalItem) -> dict[str, str]:
     f = item.fields
-    eff = _effective_category(item.category)
     base: dict[str, str] = {
-        "name": item.title,
+        "name":   item.title,
         "folder": item.folder or "",
-        "type": CANONICAL_TO_NORDPASS[eff],
     }
 
-    if eff == Category.LOGIN:
-        base["url"] = f.get("url") or ""
+    if item.category == Category.LOGIN:
+        base["url"]      = f.get("url") or ""
         base["username"] = f.get("username") or ""
         base["password"] = f.get("password") or ""
-        base["note"] = item.notes or ""
+        base["note"]     = item.notes or ""
+        base["totp"]     = f.get("otp") or ""
 
-    elif eff == Category.CREDIT_CARD:
-        base["cardholder"] = f.get("cardholder") or ""
-        base["cardnumber"] = f.get("number") or ""
-        base["cvc"] = f.get("cvv") or ""
-        base["expirydate"] = f.get("expiration") or ""
-        base["zipcode"] = f.get("zip") or ""
-        base["note"] = item.notes or ""
+    elif item.category == Category.CREDIT_CARD:
+        base["cardholdername"] = f.get("cardholder") or ""
+        base["cardnumber"]     = f.get("number") or ""
+        base["cvc"]            = f.get("cvv") or ""
+        base["expirydate"]     = f.get("expiration") or ""
+        base["zipcode"]        = f.get("zip") or ""
+        base["note"]           = item.notes or ""
 
-    elif eff == Category.SECURE_NOTE:
+    elif item.category == Category.SECURE_NOTE:
         base["note"] = f.get("body") or ""
 
-    elif eff == Category.IDENTITY:
-        base["full_name"] = f.get("first_name") or ""
-        base["email"] = f.get("email") or ""
+    elif item.category == Category.IDENTITY:
+        base["full_name"]    = f.get("first_name") or ""
+        base["email"]        = f.get("email") or ""
         base["phone_number"] = f.get("phone") or ""
-        base["address1"] = f.get("address1") or ""
-        base["address2"] = f.get("address2") or ""
-        base["city"] = f.get("city") or ""
-        base["state"] = f.get("state") or ""
-        base["country"] = f.get("country") or ""
+        base["address1"]     = f.get("address1") or ""
+        base["address2"]     = f.get("address2") or ""
+        base["city"]         = f.get("city") or ""
+        base["state"]        = f.get("state") or ""
+        base["country"]      = f.get("country") or ""
+
+    else:
+        # Categorias sem mapeamento nativo → LOGIN
+        base["url"]      = f.get("url") or ""
+        base["username"] = f.get("username") or ""
+        base["password"] = f.get("password") or ""
+        base["note"]     = item.notes or ""
 
     return base
 
 
 class NordPassExporter(Exporter):
     target_name = "nordpass"
-    # Todas as categorias são suportadas — as sem mapeamento nativo viram LOGIN.
+    # Todas as categorias são aceitas — as sem mapeamento nativo viram LOGIN.
     supported_categories = set(Category)
 
     def export(self, items: list[CanonicalItem], out_path: Path) -> ExportReport:

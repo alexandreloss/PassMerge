@@ -69,6 +69,8 @@ o merger agrupa duplicatas e resolve conflitos automaticamente.
 | --- | --- | --- | --- |
 | Google Chrome | `--chrome` | CSV (5 colunas) | LOGIN |
 | NordPass | `--nordpass` | CSV (multi-categoria) | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
+
+> **Nota:** o importer NordPass suporta dois layouts — o CSV exportado pelo próprio NordPass (com coluna `type`) e o template oficial de importação do NordPass (sem `type`, com `cardholdername`/`totp`/`shared_folder`). Quando `type` está ausente, a categoria é inferida pelo conteúdo.
 | 1Password | `--onepassword` | `.1pux` (ZIP + JSON) | LOGIN, CREDIT_CARD, SECURE_NOTE, SERVER, WIRELESS, IDENTITY, DATABASE, SOFTWARE_LICENSE |
 | Kaspersky | `--kaspersky` | TXT (blocos) | LOGIN, SECURE_NOTE |
 
@@ -124,7 +126,7 @@ Itens de categorias não suportadas pelo formato de destino são omitidos e list
 | Destino | Flag | Formato | Categorias exportadas |
 | --- | --- | --- | --- |
 | Google Chrome | `--to-chrome` | CSV | LOGIN |
-| NordPass | `--to-nordpass` | CSV | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
+| NordPass | `--to-nordpass` | CSV (template oficial) | todas (sem mapeamento nativo → LOGIN) |
 | 1Password | `--to-onepassword` | `.1pux` (ZIP + JSON) | todas |
 | Kaspersky | `--to-kaspersky` | TXT | LOGIN, SECURE_NOTE |
 
