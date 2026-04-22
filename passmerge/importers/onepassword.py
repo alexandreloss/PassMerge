@@ -118,6 +118,9 @@ def _parse_item(raw: dict[str, Any]) -> CanonicalItem | None:
     if not title:
         title = "sem título"
 
+    if str(raw.get("state", "")).lower() == "archived":
+        return None
+
     created_at = _epoch_to_iso(raw.get("createdAt"))
     updated_at = _epoch_to_iso(raw.get("updatedAt"))
     favorite = bool(raw.get("favorite", 0))

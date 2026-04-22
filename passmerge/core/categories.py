@@ -42,10 +42,23 @@ CANONICAL_TO_ONEPASSWORD: dict[Category, str] = {
     Category.CREDIT_CARD:      "002",
     Category.SECURE_NOTE:      "003",
     Category.IDENTITY:         "004",
+    Category.PASSWORD:         "005",
     Category.SERVER:           "110",
     Category.SOFTWARE_LICENSE: "111",
+    Category.BANK_ACCOUNT:     "112",
     Category.DATABASE:         "113",
+    Category.DRIVER_LICENCE:   "114",
+    Category.OUTDOOR_LICENSE:  "115",
+    Category.MEMBERSHIP:       "116",
+    Category.PASSPORT:         "117",
+    Category.REWARD_PROGRAM:   "118",
+    Category.SSN:              "119",
     Category.WIRELESS:         "120",
+    Category.EMAIL_ACCOUNT:    "121",
+    Category.API_CREDENTIAL:   "122",
+    Category.MEDICAL_RECORD:   "123",
+    Category.CRYPTO_WALLET:    "124",
+    Category.DOCUMENT:         "125",
     Category.OTHER:            "003",  # fallback: secure note
 }
 

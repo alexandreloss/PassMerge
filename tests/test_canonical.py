@@ -110,9 +110,14 @@ class TestVault(unittest.TestCase):
 
 class TestCategory(unittest.TestCase):
     def test_all_categories_in_enum(self):
-        expected = {"login", "credit_card", "server", "secure_note",
-                    "identity", "software_license", "database",
-                    "wireless", "other"}
+        expected = {
+            "login", "credit_card", "server", "secure_note", "identity",
+            "software_license", "database", "wireless",
+            "password", "bank_account", "driver_licence", "outdoor_license",
+            "membership", "passport", "reward_program", "ssn",
+            "email_account", "api_credential", "medical_record",
+            "crypto_wallet", "document", "other",
+        }
         self.assertEqual({c.value for c in Category}, expected)
 
 

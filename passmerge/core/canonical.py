@@ -25,34 +25,56 @@ SCHEMA_VERSION = "1.0"
 
 class Category(str, Enum):
     """Categorias canônicas suportadas (ver seção 4 da arquitetura)."""
-    LOGIN = "login"
-    CREDIT_CARD = "credit_card"
-    SERVER = "server"
-    SECURE_NOTE = "secure_note"
-    IDENTITY = "identity"
+    LOGIN            = "login"
+    CREDIT_CARD      = "credit_card"
+    SERVER           = "server"
+    SECURE_NOTE      = "secure_note"
+    IDENTITY         = "identity"
     SOFTWARE_LICENSE = "software_license"
-    DATABASE = "database"
-    WIRELESS = "wireless"
-    OTHER = "other"
+    DATABASE         = "database"
+    WIRELESS         = "wireless"
+    # Categorias adicionais mapeadas do 1Password
+    PASSWORD         = "password"
+    BANK_ACCOUNT     = "bank_account"
+    DRIVER_LICENCE   = "driver_licence"
+    OUTDOOR_LICENSE  = "outdoor_license"
+    MEMBERSHIP       = "membership"
+    PASSPORT         = "passport"
+    REWARD_PROGRAM   = "reward_program"
+    SSN              = "ssn"
+    EMAIL_ACCOUNT    = "email_account"
+    API_CREDENTIAL   = "api_credential"
+    MEDICAL_RECORD   = "medical_record"
+    CRYPTO_WALLET    = "crypto_wallet"
+    DOCUMENT         = "document"
+    OTHER            = "other"
 
 
 # Campos esperados por categoria (validação leve na Fase 1; estrita na F3).
 CATEGORY_FIELDS: dict[Category, set[str]] = {
-    Category.LOGIN: {"username", "password", "url", "otp", "urls_additional", "pin"},
-    Category.CREDIT_CARD: {"cardholder", "number", "cvv", "expiration",
-                           "brand", "pin", "zip"},
-    Category.SERVER: {"hostname", "port", "username", "password",
-                      "private_key", "key_passphrase"},
-    Category.SECURE_NOTE: {"body"},
-    Category.IDENTITY: {"first_name", "last_name", "email", "phone",
-                        "address1", "address2", "city", "state",
-                        "country", "zip", "birth_date"},
-    Category.SOFTWARE_LICENSE: {"product", "version", "license_key",
-                                "licensed_to", "purchase_date"},
-    Category.DATABASE: {"hostname", "port", "database", "username",
-                        "password", "type"},
-    Category.WIRELESS: {"ssid", "password", "security_type"},
-    Category.OTHER: set(),
+    Category.LOGIN:            {"username", "password", "url", "otp", "urls_additional", "pin"},
+    Category.CREDIT_CARD:      {"cardholder", "number", "cvv", "expiration", "brand", "pin", "zip"},
+    Category.SERVER:           {"hostname", "port", "username", "password", "private_key", "key_passphrase"},
+    Category.SECURE_NOTE:      {"body"},
+    Category.IDENTITY:         {"first_name", "last_name", "email", "phone",
+                                "address1", "address2", "city", "state", "country", "zip", "birth_date"},
+    Category.SOFTWARE_LICENSE: {"product", "version", "license_key", "licensed_to", "purchase_date"},
+    Category.DATABASE:         {"hostname", "port", "database", "username", "password", "type"},
+    Category.WIRELESS:         {"ssid", "password", "security_type"},
+    Category.PASSWORD:         {"password"},
+    Category.BANK_ACCOUNT:     {"account_number", "routing_number", "bank_name", "username", "password", "pin"},
+    Category.DRIVER_LICENCE:   {"number", "full_name", "expiration", "state", "country"},
+    Category.OUTDOOR_LICENSE:  {"number", "full_name", "expiration", "state"},
+    Category.MEMBERSHIP:       {"member_id", "organization", "expiration"},
+    Category.PASSPORT:         {"number", "full_name", "expiration", "country", "birth_date"},
+    Category.REWARD_PROGRAM:   {"member_id", "organization", "username", "password"},
+    Category.SSN:              {"number", "full_name"},
+    Category.EMAIL_ACCOUNT:    {"username", "password", "smtp_server", "smtp_port", "imap_server", "imap_port"},
+    Category.API_CREDENTIAL:   {"username", "password", "hostname", "credential"},
+    Category.MEDICAL_RECORD:   {"patient_name", "date", "notes"},
+    Category.CRYPTO_WALLET:    {"wallet_address", "private_key", "seed_phrase"},
+    Category.DOCUMENT:         {"body"},
+    Category.OTHER:            set(),
 }
 
 
