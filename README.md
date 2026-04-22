@@ -15,12 +15,12 @@ Fase 4 da arquitetura — **Exporters**:
 
 - `exporters/base.py` — `Exporter` (ABC) + `ExportReport` (contagem, skipped, truncated, warnings)
 - `exporters/chrome.py` — CSV Google Chrome (LOGIN)
-- `exporters/nordpass.py` — CSV NordPass (LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY)
+- `exporters/nordpass.py` — CSV NordPass (template oficial de importação)
 - `exporters/kaspersky.py` — TXT Kaspersky (LOGIN → bloco `Websites`, SECURE_NOTE → bloco `Notes`)
-- `exporters/onepassword.py` — ZIP `.1pux` 1Password (todas as categorias)
+- `exporters/onepassword.py` — ZIP `.1pux` 1Password (todas as 22 categorias)
 - `passmerge export` — CLI para exportar o vault para 1–4 formatos simultaneamente
 
-Fases 1–3 mantidas integralmente: 4 importers, schema canônico, vault JSON, merge com resolução de conflitos, comando `manual`.
+Fases 1–3 mantidas integralmente: 4 importers, schema canônico com 22 categorias, vault JSON, merge com resolução de conflitos, comando `manual`.
 
 ## Requisitos
 
@@ -63,21 +63,32 @@ o merger agrupa duplicatas e resolve conflitos automaticamente.
 3. Escolha o formato **1Password (`.1pux`)**
 4. Salve o arquivo e passe o caminho para `--onepassword`
 
-### Formatos aceitos por gerenciador
+### Formatos aceitos por gerenciador (import)
 
 | Gerenciador | Flag | Formato | Categorias suportadas |
-| --- | --- | --- | --- |
+|---|---|---|---|
 | Google Chrome | `--chrome` | CSV (5 colunas) | LOGIN |
-| NordPass | `--nordpass` | CSV (multi-categoria) | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
-
-> **Nota:** o importer NordPass suporta dois layouts — o CSV exportado pelo próprio NordPass (com coluna `type`) e o template oficial de importação do NordPass (sem `type`, com `cardholdername`/`totp`/`shared_folder`). Quando `type` está ausente, a categoria é inferida pelo conteúdo.
-| 1Password | `--onepassword` | `.1pux` (ZIP + JSON) | LOGIN, CREDIT_CARD, SECURE_NOTE, SERVER, WIRELESS, IDENTITY, DATABASE, SOFTWARE_LICENSE |
+| NordPass | `--nordpass` | CSV | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
+| 1Password | `--onepassword` | `.1pux` (ZIP + JSON) | Todas as 22 categorias¹ |
 | Kaspersky | `--kaspersky` | TXT (blocos) | LOGIN, SECURE_NOTE |
+
+¹ LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY, PASSWORD, SERVER, SOFTWARE_LICENSE, BANK_ACCOUNT,
+DATABASE, DRIVER_LICENCE, OUTDOOR_LICENSE, MEMBERSHIP, PASSPORT, REWARD_PROGRAM, SSN, WIRELESS,
+EMAIL_ACCOUNT, API_CREDENTIAL, MEDICAL_RECORD, CRYPTO_WALLET, DOCUMENT, OTHER.
+
+> **Nota NordPass:** o importer suporta dois layouts — o CSV exportado pelo próprio NordPass
+> (com coluna `type`) e o template oficial de importação (sem `type`, com `cardholdername`/
+> `totp`/`shared_folder`). Quando `type` está ausente, a categoria é inferida pelo conteúdo.
+
+> **Nota 1Password:** itens com `state = "archived"` são ignorados na importação.
 
 ### Exemplo de comando completo
 
-python -m passmerge import --onepassword C:\Users\Alexandre\Senhas\1Password.1pux --kaspersky C:\Users\Alexandre\Senhas\Kaspersky.txt --chrome C:\Users\Alexandre\Senhas\Chrome.csv --vault C:\Users\Alexandre\Senhas\cofre.json
-
+    python -m passmerge import \
+        --onepassword C:\Senhas\1Password.1pux \
+        --kaspersky   C:\Senhas\Kaspersky.txt  \
+        --chrome      C:\Senhas\Chrome.csv     \
+        --vault       C:\Senhas\cofre.json
 
 ### Ver resumo do vault
 
@@ -89,7 +100,9 @@ python -m passmerge import --onepassword C:\Users\Alexandre\Senhas\1Password.1pu
 
 ### Resolver conflitos manualmente
 
-Após revisar `vault.conflicts.json`, marque a versão escolhida trocando `"escolhido": "[]"` por `"escolhido": "[x]"` em exatamente uma versão de cada conflito:
+Após revisar `vault.conflicts.json`, marque a versão escolhida trocando
+`"escolhido": "[]"` por `"escolhido": "[x]"` em exatamente uma versão de
+cada conflito:
 
 ```json
 {
@@ -115,19 +128,20 @@ O comando:
 Todos os `--to-*` são opcionais — informe ao menos um:
 
     python -m passmerge export \
-        --vault       meu_vault.json \
+        --vault          meu_vault.json \
         --to-chrome      saida_chrome.csv \
         --to-nordpass    saida_nordpass.csv \
         --to-onepassword saida_1password.1pux \
         --to-kaspersky   saida_kaspersky.txt
 
-Itens de categorias não suportadas pelo formato de destino são omitidos e listados no terminal (motivo: `unsupported_category`).
+Itens de categorias não suportadas pelo formato de destino são omitidos e
+listados no terminal (motivo: `unsupported_category`).
 
 | Destino | Flag | Formato | Categorias exportadas |
-| --- | --- | --- | --- |
+|---|---|---|---|
 | Google Chrome | `--to-chrome` | CSV | LOGIN |
-| NordPass | `--to-nordpass` | CSV (template oficial) | todas (sem mapeamento nativo → LOGIN) |
-| 1Password | `--to-onepassword` | `.1pux` (ZIP + JSON) | todas |
+| NordPass | `--to-nordpass` | CSV (template oficial) | Todas (sem mapeamento nativo → exportado como LOGIN) |
+| 1Password | `--to-onepassword` | `.1pux` (ZIP + JSON) | Todas as 22 categorias |
 | Kaspersky | `--to-kaspersky` | TXT | LOGIN, SECURE_NOTE |
 
 ### Apagar um arquivo com sobrescrita segura
@@ -141,22 +155,22 @@ Itens de categorias não suportadas pelo formato de destino são omitidos e list
       __main__.py              # habilita 'python -m passmerge'
       cli.py                   # argparse + todos os comandos
       core/
-        canonical.py           # Vault, CanonicalItem, Category, SourceRef
+        canonical.py           # Vault, CanonicalItem, Category (22 valores), SourceRef
         categories.py          # mapeamento canônico ↔ nativo (4 gerenciadores)
         normalize.py           # normalize_url, normalize_email, normalize_phone
         matching.py            # primary_key por categoria (deduplicação)
-        conflict.py            # ConflictLog, ReviewConflict (JSON formatado, com plaintext para revisão humana)
+        conflict.py            # ConflictLog, ReviewConflict (JSON formatado para revisão humana)
         merger.py              # merge(), MergeResult, MergeStats
       importers/
-        base.py                # classe abstrata Importer
+        base.py                # Importer (ABC)
         chrome.py              # Google Chrome CSV
-        nordpass.py            # NordPass CSV
+        nordpass.py            # NordPass CSV (dois layouts)
         onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
         kaspersky.py           # Kaspersky TXT
       exporters/
         base.py                # Exporter (ABC) + ExportReport
         chrome.py              # Google Chrome CSV
-        nordpass.py            # NordPass CSV
+        nordpass.py            # NordPass CSV (template oficial)
         onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
         kaspersky.py           # Kaspersky TXT
       security/
@@ -177,7 +191,7 @@ Itens de categorias não suportadas pelo formato de destino são omitidos e list
       test_importer_kaspersky.py
       test_matching.py           # chaves de deduplicação por categoria
       test_conflict.py           # ConflictLog / ReviewConflict
-      test_merger.py             # 11 cenários de merge
+      test_merger.py             # cenários de merge
       test_manual_cmd.py         # comando passmerge manual
       test_exporter_chrome.py    # ChromeExporter
       test_exporter_nordpass.py  # NordPassExporter
@@ -189,7 +203,7 @@ Itens de categorias não suportadas pelo formato de destino são omitidos e list
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **244 testes, todos OK**.
+Resultado esperado: **247 testes, todos OK**.
 
 ## Merge: como funciona
 
@@ -213,12 +227,13 @@ Quando `passmerge import` recebe ≥2 fontes, o merger:
 
    **Conflito genuíno** (vai para `<vault>.conflicts.json`): sem timestamps, múltiplos vaults com senhas diferentes e divergentes.
 
-4. **Complementação:** campos ausentes no vencedor são preenchidos por campos presentes nos perdedores, inclusive os descartados na resolução de conflito.
+4. **Complementação:** campos ausentes no vencedor são preenchidos por campos presentes nos perdedores.
 5. **Preservação:** valores perdedores ficam em `extras["_losers"]` (com SHA-256, sem texto claro).
 
 ### Revisar conflitos
 
-O arquivo `<vault>.conflicts.json` contém apenas os conflitos que exigem decisão manual, em JSON formatado e legível:
+O arquivo `<vault>.conflicts.json` contém apenas os conflitos que exigem
+decisão manual, em JSON formatado e legível:
 
 ```json
 [
@@ -242,8 +257,8 @@ O arquivo `<vault>.conflicts.json` contém apenas os conflitos que exigem decis�
 **Atendido:**
 
 - Importers produzem ≥1 `CanonicalItem` por categoria suportada.
-- Merger deduplica corretamente em todos os 11 cenários de teste.
-- Conflitos resolvidos automaticamente não aparecem no log; apenas os genuínos (senhas diferentes, sem timestamps) vão para `<vault>.conflicts.json`.
+- Merger deduplica corretamente em todos os cenários de teste.
+- Conflitos resolvidos automaticamente não aparecem no log; apenas os genuínos vão para `<vault>.conflicts.json`.
 - Merge é não-destrutivo: nenhum valor é silenciosamente descartado.
 - Exporters produzem arquivos que os importers correspondentes conseguem reler com fidelidade (round-trip).
 - Itens de categorias não suportadas pelo destino são omitidos e registrados em `ExportReport.skipped_items`.
