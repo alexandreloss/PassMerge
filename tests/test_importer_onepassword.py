@@ -180,6 +180,24 @@ class TestOnePasswordEdgeCases(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].category, Category.SECURE_NOTE)
 
+    def test_archived_item_ignored(self):
+        items = self._parse_bytes(_make_minimal_1pux([
+            {"uuid": "active", "categoryUuid": "001",
+             "overview": {"title": "Active"},
+             "details": {"loginFields": [
+                 {"designation": "username", "value": "u"},
+                 {"designation": "password", "value": "p"},
+             ], "notesPlain": "", "sections": []}},
+            {"uuid": "archived", "categoryUuid": "001", "state": "archived",
+             "overview": {"title": "Archived"},
+             "details": {"loginFields": [
+                 {"designation": "username", "value": "u2"},
+                 {"designation": "password", "value": "p2"},
+             ], "notesPlain": "", "sections": []}},
+        ]))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].title, "Active")
+
     def test_invalid_file_raises_value_error(self):
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".1pux", delete=False) as f:
