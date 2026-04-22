@@ -19,8 +19,12 @@ ONEPASSWORD_TO_CANONICAL: dict[str, Category] = {
     "003": Category.SECURE_NOTE,       # Secure Note
     "004": Category.IDENTITY,          # Identity
     "005": Category.PASSWORD,          # Password (autônoma, sem campo de usuário)
+    "101": Category.BANK_ACCOUNT,      # Bank Account
+    "102": Category.DATABASE,          # Database
+    "107": Category.REWARD_PROGRAM,    # Reward Program
+    "109": Category.WIRELESS,          # Wireless Router
     "110": Category.SERVER,            # Server
-    "111": Category.SOFTWARE_LICENSE,  # Software License
+    "111": Category.EMAIL_ACCOUNT,     # Email Account
     "112": Category.BANK_ACCOUNT,      # Bank Account
     "113": Category.DATABASE,          # Database
     "114": Category.DRIVER_LICENCE,    # Driver License
@@ -43,8 +47,12 @@ CANONICAL_TO_ONEPASSWORD: dict[Category, str] = {
     Category.SECURE_NOTE:      "003",
     Category.IDENTITY:         "004",
     Category.PASSWORD:         "005",
+    Category.BANK_ACCOUNT:     "101",
+    Category.DATABASE:         "102",
+    Category.REWARD_PROGRAM:   "107",
+    Category.WIRELESS:         "109",
     Category.SERVER:           "110",
-    Category.SOFTWARE_LICENSE: "111",
+    Category.EMAIL_ACCOUNT:    "111",
     Category.BANK_ACCOUNT:     "112",
     Category.DATABASE:         "113",
     Category.DRIVER_LICENCE:   "114",

@@ -33,7 +33,6 @@ class Category(str, Enum):
     SOFTWARE_LICENSE = "software_license"
     DATABASE         = "database"
     WIRELESS         = "wireless"
-    # Categorias adicionais mapeadas do 1Password
     PASSWORD         = "password"
     BANK_ACCOUNT     = "bank_account"
     DRIVER_LICENCE   = "driver_licence"
