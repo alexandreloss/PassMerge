@@ -12,32 +12,41 @@ from __future__ import annotations
 
 from .canonical import Category
 
-# 1Password: códigos internos conhecidos (templateUuid no .1pux)
+# 1Password: categoryUuid → Category canônica
 ONEPASSWORD_TO_CANONICAL: dict[str, Category] = {
-    "001": Category.LOGIN,
-    "002": Category.CREDIT_CARD,
-    "003": Category.SECURE_NOTE,
-    "004": Category.IDENTITY,
-    "005": Category.SOFTWARE_LICENSE,
-    "100": Category.SOFTWARE_LICENSE,   # software license
-    "101": Category.LOGIN,              # bank account -> tratado como login
-    "102": Category.DATABASE,
-    "106": Category.IDENTITY,           # passport
-    "110": Category.SERVER,
-    "111": Category.WIRELESS,
-    "112": Category.LOGIN,              # API credential
+    "001": Category.LOGIN,             # Login
+    "002": Category.CREDIT_CARD,       # Credit Card
+    "003": Category.SECURE_NOTE,       # Secure Note
+    "004": Category.IDENTITY,          # Identity
+    "005": Category.PASSWORD,          # Password (autônoma, sem campo de usuário)
+    "110": Category.SERVER,            # Server
+    "111": Category.SOFTWARE_LICENSE,  # Software License
+    "112": Category.BANK_ACCOUNT,      # Bank Account
+    "113": Category.DATABASE,          # Database
+    "114": Category.DRIVER_LICENCE,    # Driver License
+    "115": Category.OUTDOOR_LICENSE,   # Outdoor License
+    "116": Category.MEMBERSHIP,        # Membership
+    "117": Category.PASSPORT,          # Passport
+    "118": Category.REWARD_PROGRAM,    # Reward Program
+    "119": Category.SSN,               # Social Security Number
+    "120": Category.WIRELESS,          # Wireless Router
+    "121": Category.EMAIL_ACCOUNT,     # Email Account
+    "122": Category.API_CREDENTIAL,    # API Credential
+    "123": Category.MEDICAL_RECORD,    # Medical Record
+    "124": Category.CRYPTO_WALLET,     # Crypto Wallet
+    "125": Category.DOCUMENT           # Document
 }
 
 CANONICAL_TO_ONEPASSWORD: dict[Category, str] = {
-    Category.LOGIN: "001",
-    Category.CREDIT_CARD: "002",
-    Category.SECURE_NOTE: "003",
-    Category.IDENTITY: "004",
-    Category.SOFTWARE_LICENSE: "100",
-    Category.DATABASE: "102",
-    Category.SERVER: "110",
-    Category.WIRELESS: "111",
-    Category.OTHER: "003",              # fallback: secure note
+    Category.LOGIN:            "001",
+    Category.CREDIT_CARD:      "002",
+    Category.SECURE_NOTE:      "003",
+    Category.IDENTITY:         "004",
+    Category.SERVER:           "110",
+    Category.SOFTWARE_LICENSE: "111",
+    Category.DATABASE:         "113",
+    Category.WIRELESS:         "120",
+    Category.OTHER:            "003",  # fallback: secure note
 }
 
 # NordPass: valores do campo `type` no CSV

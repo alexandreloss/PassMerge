@@ -137,7 +137,7 @@ EXPORT_DATA = {
                     "uuid": "wifi-item-001",
                     "createdAt": 1685577600,
                     "updatedAt": 1685577600,
-                    "categoryUuid": "111",
+                    "categoryUuid": "120",
                     "favorite": 0,
                     "trashed": "N",
                     "overview": {"title": "MyHomeNetwork", "url": "", "tags": []},

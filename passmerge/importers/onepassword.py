@@ -121,9 +121,6 @@ def _parse_item(raw: dict[str, Any]) -> CanonicalItem | None:
     created_at = _epoch_to_iso(raw.get("createdAt"))
     updated_at = _epoch_to_iso(raw.get("updatedAt"))
     favorite = bool(raw.get("favorite", 0))
-    if str(raw.get("state", "")).lower() == "archived":
-        return None
-
     trashed = str(raw.get("trashed", "N")).upper() == "Y"
     tags: list[str] = list(overview.get("tags") or [])
 
