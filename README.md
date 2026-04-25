@@ -207,28 +207,77 @@ Resultado esperado: **247 testes, todos OK**.
 
 ## Merge: como funciona
 
-Quando `passmerge import` recebe ≥2 fontes, o merger:
+Quando `passmerge import` recebe ≥2 fontes, o merger executa 4 etapas:
 
-1. Agrupa itens por `(category, primary_key)` — chave canônica por categoria.
-2. **Grupos com 1 item** → passam direto.
-3. **Grupos com >1 item** → elege vencedor e resolve campo a campo:
+### 1. Agrupamento (deduplicação)
 
-   **Critérios de eleição do vencedor** (ordem decrescente de prioridade):
-   - Timestamp mais recente.
-   - Tem timestamp vs. não tem.
-   - Tem senha preenchida vs. sem senha.
-   - Prioridade de fonte: `nordpass > 1password > chrome > kaspersky`.
+Itens de todas as fontes são agrupados pela chave `(categoria, primary_key)`.
+A `primary_key` é calculada por categoria a partir dos campos canônicos,
+sempre normalizados (lowercase, strip, colapso de espaços internos):
 
-   **Resolução automática de conflito de campo** (sem gerar entrada no log):
-   - Vencedor ou perdedor tem timestamp → timestamp decide.
-   - Todos os vaults com senha preenchida têm a mesma senha → prioridade de fonte decide.
-   - Vencedor tem senha e todos os perdedores divergentes não têm senha → vencedor decide.
-   - Em conflito multi-vault: vaults com senha em branco são excluídos antes da comparação; se restar só um lado com senha → resolvido automaticamente.
+| Categoria | Chave primária |
+|---|---|
+| LOGIN | `domínio_da_url` + `username` |
+| CREDIT_CARD | `últimos 4 dígitos` + `cardholder` |
+| SERVER | `hostname` + `username` + `port` |
+| SECURE_NOTE | `title` + `hash(body[:256])` |
+| IDENTITY | `email` — ou `first_name` + `last_name` + `phone` |
+| SOFTWARE_LICENSE | `product` + `license_key` |
+| DATABASE | `hostname` + `database` + `username` |
+| WIRELESS | `ssid` |
+| demais / OTHER | `title` |
 
-   **Conflito genuíno** (vai para `<vault>.conflicts.json`): sem timestamps, múltiplos vaults com senhas diferentes e divergentes.
+> Itens de categorias diferentes nunca colidem mesmo que os campos coincidam.
+> URLs são normalizadas extraindo apenas o netloc (`www.` removido).
 
-4. **Complementação:** campos ausentes no vencedor são preenchidos por campos presentes nos perdedores.
-5. **Preservação:** valores perdedores ficam em `extras["_losers"]` (com SHA-256, sem texto claro).
+### 2. Eleição do vencedor
+
+Dentro de cada grupo, os itens são ordenados por uma chave composta de 4 critérios
+(**menor = melhor**):
+
+| Prioridade | Critério |
+|---|---|
+| 1 | Tem `updated_at` (itens com timestamp antes de itens sem) |
+| 2 | Timestamp mais recente (epoch decrescente) |
+| 3 | Tem `password` preenchida |
+| 4 | Rank de fonte: `nordpass(0) > 1password(1) > chrome(2) > kaspersky(3)` |
+
+O primeiro item após essa ordenação é o **vencedor**; os demais são **perdedores**.
+
+### 3. Resolução campo a campo
+
+Para cada campo presente em qualquer item do grupo:
+
+**a) Complementação** — o vencedor não tem valor para o campo:
+- Se um único valor é encontrado nos perdedores → adotado diretamente.
+- Se múltiplos valores divergem → o de melhor rank de fonte é adotado.
+- O campo é marcado como `fields_complemented` nas estatísticas.
+
+**b) Acordo** — o vencedor tem valor e todos os perdedores com valor concordam →
+nenhuma ação, valor do vencedor mantido.
+
+**c) Divergência — resolução automática** (sem entrada no log):
+- **Timestamp:** vencedor ou algum perdedor divergente tem `updated_at` →
+  a ordenação da etapa 2 já elegeu o mais recente; resolvido.
+- **Senha igual:** múltiplos vaults têm senhas preenchidas e todas são iguais →
+  prioridade de fonte decide; resolvido.
+- **Vencedor tem senha, perdedores divergentes não têm:** o critério de senha
+  da eleição já resolveu; resolvido.
+
+**d) Conflito genuíno** → registrado em `<vault>.conflicts.json`:
+sem timestamps, múltiplas fontes com senhas diferentes e divergentes.
+Requer decisão manual via `passmerge manual`.
+
+### 4. Merge de metadados e preservação
+
+| Campo | Regra |
+|---|---|
+| `tags` | União de todas as tags de todos os itens do grupo |
+| `favorite` | OR — basta um item ser favorito para o resultado ser favorito |
+| `trashed` | AND — só marcado como lixeira se **todos** os itens estiverem na lixeira |
+| `notes` | Nota do vencedor; se vazia, usa a primeira nota não-vazia de um perdedor |
+| `sources` | Acumula todos os `SourceRef` do grupo (rastreabilidade completa) |
+| `extras["_losers"]` | Valores divergentes descartados ficam registrados com `source`, `field` e `sha256(value)` (sem texto claro) |
 
 ### Revisar conflitos
 
