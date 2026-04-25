@@ -124,16 +124,18 @@ def cmd_wipe(args: argparse.Namespace) -> int:
 def cmd_import(args: argparse.Namespace) -> int:
     # Importação lazy para evitar ciclos no topo do módulo
     from .core.merger import merge
+    from .importers.apple import ApplePasswordsImporter
     from .importers.chrome import ChromeImporter
     from .importers.kaspersky import KasperskyImporter
     from .importers.nordpass import NordPassImporter
     from .importers.onepassword import OnePasswordImporter
 
     sources = [
-        ("chrome",      args.chrome,      ChromeImporter()),
-        ("nordpass",    args.nordpass,     NordPassImporter()),
-        ("onepassword", args.onepassword,  OnePasswordImporter()),
-        ("kaspersky",   args.kaspersky,    KasperskyImporter()),
+        ("chrome",       args.chrome,       ChromeImporter()),
+        ("nordpass",     args.nordpass,      NordPassImporter()),
+        ("onepassword",  args.onepassword,   OnePasswordImporter()),
+        ("applesenhas",  args.applesenhas,   ApplePasswordsImporter()),
+        ("kaspersky",    args.kaspersky,     KasperskyImporter()),
     ]
 
     # Valida que ao menos um arquivo foi informado
@@ -141,7 +143,7 @@ def cmd_import(args: argparse.Namespace) -> int:
     if not active:
         print(
             "ERRO: informe ao menos um arquivo de entrada "
-            "(--chrome, --nordpass, --onepassword ou --kaspersky).",
+            "(--chrome, --nordpass, --onepassword, --applesenhas ou --kaspersky).",
             file=sys.stderr,
         )
         return 1
@@ -297,22 +299,24 @@ def cmd_manual(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
+    from .exporters.apple import ApplePasswordsExporter
     from .exporters.chrome import ChromeExporter
     from .exporters.kaspersky import KasperskyExporter
     from .exporters.nordpass import NordPassExporter
     from .exporters.onepassword import OnePasswordExporter
 
     targets = [
-        ("chrome",      args.to_chrome,      ChromeExporter()),
-        ("nordpass",    args.to_nordpass,     NordPassExporter()),
-        ("onepassword", args.to_onepassword,  OnePasswordExporter()),
-        ("kaspersky",   args.to_kaspersky,    KasperskyExporter()),
+        ("chrome",       args.to_chrome,       ChromeExporter()),
+        ("nordpass",     args.to_nordpass,      NordPassExporter()),
+        ("onepassword",  args.to_onepassword,   OnePasswordExporter()),
+        ("applesenhas",  args.to_applesenhas,   ApplePasswordsExporter()),
+        ("kaspersky",    args.to_kaspersky,     KasperskyExporter()),
     ]
     active = [(name, path, exp) for name, path, exp in targets if path]
     if not active:
         print(
             "ERRO: informe ao menos um destino "
-            "(--to-chrome, --to-nordpass, --to-onepassword ou --to-kaspersky).",
+            "(--to-chrome, --to-nordpass, --to-onepassword, --to-applesenhas ou --to-kaspersky).",
             file=sys.stderr,
         )
         return 1
@@ -380,6 +384,8 @@ def build_parser() -> argparse.ArgumentParser:
                           help="CSV exportado pelo NordPass")
     p_import.add_argument("--onepassword", metavar="1PUX",
                           help="arquivo .1pux exportado pelo 1Password")
+    p_import.add_argument("--applesenhas", metavar="CSV",
+                          help="CSV exportado pelo Apple Passwords (iPhone/macOS)")
     p_import.add_argument("--kaspersky", metavar="TXT",
                           help="arquivo TXT exportado pelo Kaspersky Password Manager")
     p_import.add_argument("--vault", required=True,
@@ -400,10 +406,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="exporta o vault para os formatos nativos dos gerenciadores",
     )
     p_export.add_argument("--vault", required=True, help="vault de origem")
-    p_export.add_argument("--to-chrome",      metavar="CSV",  help="saída para Google Chrome")
-    p_export.add_argument("--to-nordpass",    metavar="CSV",  help="saída para NordPass")
-    p_export.add_argument("--to-onepassword", metavar="1PUX", help="saída para 1Password")
-    p_export.add_argument("--to-kaspersky",   metavar="TXT",  help="saída para Kaspersky")
+    p_export.add_argument("--to-chrome",       metavar="CSV",  help="saída para Google Chrome")
+    p_export.add_argument("--to-nordpass",     metavar="CSV",  help="saída para NordPass")
+    p_export.add_argument("--to-onepassword",  metavar="1PUX", help="saída para 1Password")
+    p_export.add_argument("--to-applesenhas",  metavar="CSV",  help="saída para Apple Passwords")
+    p_export.add_argument("--to-kaspersky",    metavar="TXT",  help="saída para Kaspersky")
     p_export.set_defaults(func=cmd_export)
 
     return parser

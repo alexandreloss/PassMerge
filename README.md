@@ -11,16 +11,17 @@ Kaspersky Password Manager.
 
 ## Estado desta entrega
 
-Fase 4 da arquitetura — **Exporters**:
+Fase 4 da arquitetura — **Exporters** + suporte ao Apple Passwords:
 
 - `exporters/base.py` — `Exporter` (ABC) + `ExportReport` (contagem, skipped, truncated, warnings)
 - `exporters/chrome.py` — CSV Google Chrome (LOGIN)
 - `exporters/nordpass.py` — CSV NordPass (template oficial de importação)
 - `exporters/kaspersky.py` — TXT Kaspersky (LOGIN → bloco `Websites`, SECURE_NOTE → bloco `Notes`)
 - `exporters/onepassword.py` — ZIP `.1pux` 1Password (todas as 22 categorias)
-- `passmerge export` — CLI para exportar o vault para 1–4 formatos simultaneamente
+- `exporters/apple.py` — CSV Apple Passwords / iPhone (LOGIN)
+- `passmerge export` — CLI para exportar o vault para 1–5 formatos simultaneamente
 
-Fases 1–3 mantidas integralmente: 4 importers, schema canônico com 22 categorias, vault JSON, merge com resolução de conflitos, comando `manual`.
+Fases 1–3 mantidas integralmente: 5 importers, schema canônico com 22 categorias, vault JSON, merge com resolução de conflitos, comando `manual`.
 
 ## Requisitos
 
@@ -50,11 +51,19 @@ Todos os argumentos de fonte são opcionais — informe ao menos um:
         --chrome      google_export.csv   \
         --nordpass    nordpass_export.csv \
         --onepassword meu_export.1pux     \
+        --applesenhas apple_export.csv    \
         --kaspersky   kaspersky_export.txt \
         --vault       meu_vault.json
 
 Se o vault ainda não existir, ele é criado automaticamente. Com ≥2 fontes,
 o merger agrupa duplicatas e resolve conflitos automaticamente.
+
+### Como exportar do Apple Passwords (iPhone/macOS)
+
+1. Abra o app **Senhas** no iPhone (iOS 18+) ou em **Ajustes → Senhas** (macOS Sequoia+)
+2. Toque em ••• (menu) → **Exportar Senhas**
+3. Confirme a autenticação e salve o arquivo `.csv`
+4. Passe o caminho para `--applesenhas`
 
 ### Como exportar do 1Password
 
@@ -70,6 +79,7 @@ o merger agrupa duplicatas e resolve conflitos automaticamente.
 | Google Chrome | `--chrome` | CSV (5 colunas) | LOGIN |
 | NordPass | `--nordpass` | CSV | LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY |
 | 1Password | `--onepassword` | `.1pux` (ZIP + JSON) | Todas as 22 categorias¹ |
+| Apple Passwords | `--applesenhas` | CSV (6 colunas) | LOGIN |
 | Kaspersky | `--kaspersky` | TXT (blocos) | LOGIN, SECURE_NOTE |
 
 ¹ LOGIN, CREDIT_CARD, SECURE_NOTE, IDENTITY, PASSWORD, SERVER, SOFTWARE_LICENSE, BANK_ACCOUNT,
@@ -82,12 +92,14 @@ EMAIL_ACCOUNT, API_CREDENTIAL, MEDICAL_RECORD, CRYPTO_WALLET, DOCUMENT, OTHER.
 
 > **Nota 1Password:** itens com `state = "archived"` são ignorados na importação.
 
-### Exemplo de comando completo
+###  de comando completo
 
     python -m passmerge import \
-        --onepassword C:\Senhas\1Password.1pux \
-        --kaspersky   C:\Senhas\Kaspersky.txt  \
-        --chrome      C:\Senhas\Chrome.csv     \
+        --onepassword C:\Senhas\1Password.1pux  \
+        --nordpass    C:\Senhas\NordPass.csv    \
+        --chrome      C:\Senhas\Chrome.csv      \
+        --applesenhas C:\Senhas\Apple.csv       \
+        --kaspersky   C:\Senhas\Kaspersky.txt   \
         --vault       C:\Senhas\cofre.json
 
 ### Ver resumo do vault
@@ -128,11 +140,12 @@ O comando:
 Todos os `--to-*` são opcionais — informe ao menos um:
 
     python -m passmerge export \
-        --vault          meu_vault.json \
-        --to-chrome      saida_chrome.csv \
-        --to-nordpass    saida_nordpass.csv \
-        --to-onepassword saida_1password.1pux \
-        --to-kaspersky   saida_kaspersky.txt
+        --vault            meu_vault.json \
+        --to-chrome        saida_chrome.csv \
+        --to-nordpass      saida_nordpass.csv \
+        --to-onepassword   saida_1password.1pux \
+        --to-applesenhas   saida_apple.csv \
+        --to-kaspersky     saida_kaspersky.txt
 
 Itens de categorias não suportadas pelo formato de destino são omitidos e
 listados no terminal (motivo: `unsupported_category`).
@@ -142,6 +155,7 @@ listados no terminal (motivo: `unsupported_category`).
 | Google Chrome | `--to-chrome` | CSV | LOGIN |
 | NordPass | `--to-nordpass` | CSV (template oficial) | Todas (sem mapeamento nativo → exportado como LOGIN) |
 | 1Password | `--to-onepassword` | `.1pux` (ZIP + JSON) | Todas as 22 categorias |
+| Apple Passwords | `--to-applesenhas` | CSV (6 colunas) | LOGIN |
 | Kaspersky | `--to-kaspersky` | TXT | LOGIN, SECURE_NOTE |
 
 ### Apagar um arquivo com sobrescrita segura
@@ -166,12 +180,14 @@ listados no terminal (motivo: `unsupported_category`).
         chrome.py              # Google Chrome CSV
         nordpass.py            # NordPass CSV (dois layouts)
         onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
+        apple.py               # Apple Passwords CSV (iPhone/macOS)
         kaspersky.py           # Kaspersky TXT
       exporters/
         base.py                # Exporter (ABC) + ExportReport
         chrome.py              # Google Chrome CSV
         nordpass.py            # NordPass CSV (template oficial)
         onepassword.py         # 1Password .1pux (ZIP + export.data JSON)
+        apple.py               # Apple Passwords CSV (iPhone/macOS)
         kaspersky.py           # Kaspersky TXT
       security/
         wipe.py                # sobrescrita segura 3-pass
@@ -197,13 +213,15 @@ listados no terminal (motivo: `unsupported_category`).
       test_exporter_nordpass.py  # NordPassExporter
       test_exporter_kaspersky.py # KasperskyExporter
       test_exporter_onepassword.py # OnePasswordExporter
-      test_roundtrip.py          # round-trip: export → reimport → comparação
+      test_importer_apple.py     # ApplePasswordsImporter
+      test_exporter_apple.py     # ApplePasswordsExporter
+      test_roundtrip.py          # round-trip: export → reimport → comparação (todos os formatos)
 
 ## Testes
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **247 testes, todos OK**.
+Resultado esperado: **273 testes, todos OK**.
 
 ## Merge: como funciona
 
@@ -240,7 +258,7 @@ Dentro de cada grupo, os itens são ordenados por uma chave composta de 4 crité
 | 1 | Tem `updated_at` (itens com timestamp antes de itens sem) |
 | 2 | Timestamp mais recente (epoch decrescente) |
 | 3 | Tem `password` preenchida |
-| 4 | Rank de fonte: `nordpass(0) > 1password(1) > chrome(2) > kaspersky(3)` |
+| 4 | Rank de fonte: `nordpass(0) > 1password(1) > chrome(2) > applesenhas(3) > kaspersky(4)` |
 
 O primeiro item após essa ordenação é o **vencedor**; os demais são **perdedores**.
 

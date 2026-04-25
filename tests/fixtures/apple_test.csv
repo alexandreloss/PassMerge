@@ -1,0 +1,5 @@
+Title,URL,Username,Password,Notes,OTPAuth
+GitHub,https://github.com,user@example.com,s3cr3t!Pass,Conta dev principal,otpauth://totp/GitHub:user%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub
+Banco Inter,https://bancointer.com.br,12345678,senha_banco,App e internet banking,
+Ação Büro,https://acaoburo.example.com,üser,pässwörd,Nota com unicode,
+Item sem URL,,nourl@example.com,pass_sem_url,,

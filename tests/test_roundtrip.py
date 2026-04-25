@@ -6,10 +6,12 @@ import unittest
 from pathlib import Path
 
 from passmerge.core.canonical import CanonicalItem, Category, SourceRef
+from passmerge.exporters.apple import ApplePasswordsExporter
 from passmerge.exporters.chrome import ChromeExporter
 from passmerge.exporters.kaspersky import KasperskyExporter
 from passmerge.exporters.nordpass import NordPassExporter
 from passmerge.exporters.onepassword import OnePasswordExporter
+from passmerge.importers.apple import ApplePasswordsImporter
 from passmerge.importers.chrome import ChromeImporter
 from passmerge.importers.kaspersky import KasperskyImporter
 from passmerge.importers.nordpass import NordPassImporter
@@ -280,6 +282,68 @@ class TestOnePasswordRoundTrip(unittest.TestCase):
         self.assertIn(Category.CREDIT_CARD, cats)
         self.assertIn(Category.SECURE_NOTE, cats)
         self.assertIn(Category.SERVER, cats)
+
+
+class TestApplePasswordsRoundTrip(unittest.TestCase):
+
+    def test_login_roundtrip(self):
+        items = [_login()]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "apple.csv"
+            ApplePasswordsExporter().export(items, out)
+            reimported = ApplePasswordsImporter().parse(out)
+
+        self.assertEqual(len(reimported), 1)
+        r = reimported[0]
+        self.assertEqual(r.title, "GitHub")
+        self.assertEqual(r.fields["username"], "alice")
+        self.assertEqual(r.fields["password"], "pass123")
+        self.assertEqual(r.fields["url"], "https://github.com")
+
+    def test_otp_roundtrip(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="GitHub OTP",
+            fields={"username": "u", "password": "p", "url": "https://github.com",
+                    "otp": "otpauth://totp/GitHub?secret=ABC123"},
+            sources=[SourceRef(source="test")],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "apple.csv"
+            ApplePasswordsExporter().export([item], out)
+            reimported = ApplePasswordsImporter().parse(out)
+
+        self.assertEqual(reimported[0].fields["otp"],
+                         "otpauth://totp/GitHub?secret=ABC123")
+
+    def test_notes_roundtrip(self):
+        item = _login(title="Noted")
+        item.notes = "linha um\nlinha dois"
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "apple.csv"
+            ApplePasswordsExporter().export([item], out)
+            reimported = ApplePasswordsImporter().parse(out)
+
+        self.assertEqual(reimported[0].notes, "linha um\nlinha dois")
+
+    def test_unsupported_skipped(self):
+        items = [_login(), _note()]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "apple.csv"
+            report = ApplePasswordsExporter().export(items, out)
+            reimported = ApplePasswordsImporter().parse(out)
+
+        self.assertEqual(len(reimported), 1)
+        self.assertEqual(len(report.skipped_items), 1)
+
+    def test_unicode_roundtrip(self):
+        items = [_login(title="Ação", username="üser", password="pässwörd")]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "apple.csv"
+            ApplePasswordsExporter().export(items, out)
+            reimported = ApplePasswordsImporter().parse(out)
+
+        self.assertEqual(reimported[0].title, "Ação")
+        self.assertEqual(reimported[0].fields["username"], "üser")
 
 
 if __name__ == "__main__":

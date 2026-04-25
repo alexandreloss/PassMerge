@@ -24,7 +24,7 @@ from .canonical import CanonicalItem, Category, SourceRef
 from .conflict import ConflictLog, ReviewConflict
 from .matching import primary_key
 
-_DEFAULT_PRIORITY = ["nordpass", "1password", "chrome", "kaspersky"]
+_DEFAULT_PRIORITY = ["nordpass", "1password", "chrome", "applesenhas", "kaspersky"]
 
 _META_FIELDS = {"urls_additional"}
 
