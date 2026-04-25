@@ -198,6 +198,24 @@ class TestOnePasswordEdgeCases(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].title, "Active")
 
+    def test_password_category_reads_details_password(self):
+        """Categoria 005: senha fica em details.password, não em loginFields."""
+        items = self._parse_bytes(_make_minimal_1pux([{
+            "uuid": "pwd-item-001",
+            "categoryUuid": "005",
+            "state": "active",
+            "overview": {"title": "Village Geribá", "url": ""},
+            "details": {
+                "loginFields": [],
+                "sections": [],
+                "password": "afdjadsf888$$",
+            },
+        }]))
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item.category, Category.PASSWORD)
+        self.assertEqual(item.fields.get("password"), "afdjadsf888$$")
+
     def test_invalid_file_raises_value_error(self):
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".1pux", delete=False) as f:

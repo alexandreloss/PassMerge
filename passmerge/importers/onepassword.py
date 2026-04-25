@@ -165,6 +165,12 @@ def _parse_item(raw: dict[str, Any]) -> CanonicalItem | None:
             else:
                 extras[raw_title] = raw_value
 
+    # Categoria 005 (PASSWORD): senha fica em details.password, não em loginFields
+    if category == Category.PASSWORD:
+        direct_password = details.get("password") or ""
+        if direct_password:
+            fields.setdefault("password", direct_password)
+
     notes = details.get("notesPlain") or ""
     if category == Category.SECURE_NOTE and notes:
         fields["body"] = notes
