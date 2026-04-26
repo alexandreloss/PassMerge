@@ -28,7 +28,7 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
     f = item.fields
     base: dict[str, str] = {
         "name":   item.title,
-        "folder": item.folder or "",
+        "folder": item.tags[0] if item.tags else (item.folder or ""),
     }
 
     if item.category == Category.LOGIN:

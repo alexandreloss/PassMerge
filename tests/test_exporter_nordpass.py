@@ -121,6 +121,33 @@ class TestNordPassExporter(unittest.TestCase):
         rows = list(csv.DictReader(content.splitlines()))
         self.assertEqual(rows[0]["username"], "usuário")
 
+    def test_folder_from_first_tag(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="Tagged",
+            fields={"username": "u", "password": "p", "url": "https://x.com"},
+            tags=["Mercantil do Brasil", "VLI"],
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["folder"], "Mercantil do Brasil")
+
+    def test_folder_from_item_folder_when_no_tags(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="Foldered",
+            fields={"username": "u", "password": "p", "url": "https://x.com"},
+            folder="Work",
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["folder"], "Work")
+
+    def test_folder_empty_when_no_tags_no_folder(self):
+        content, _ = self._export([_login()])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["folder"], "")
+
 
 if __name__ == "__main__":
     unittest.main()
