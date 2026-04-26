@@ -1,18 +1,13 @@
 """Importer para o CSV exportado pelo NordPass.
 
-Suporta dois layouts:
+Suporta o formato atual do NordPass::
 
-Export do NordPass (colunas com ``type`` e ``note_date``)::
+    name,url,additional_urls,username,password,note,cardholdername,cardnumber,
+    cvc,pin,expirydate,zipcode,folder,shared_folder,full_name,phone_number,
+    email,address1,address2,city,country,state,type,custom_fields
 
-    name,url,username,password,note,cardholder,cardnumber,cvc,expirydate,
-    zipcode,folder,full_name,phone_number,email,address1,address2,city,
-    country,state,type,note_date
-
-Template oficial de import do NordPass (sem ``type``/``note_date``)::
-
-    name,url,username,password,note,cardholdername,cardnumber,cvc,expirydate,
-    zipcode,folder,full_name,phone_number,email,address1,address2,city,
-    country,state,totp,shared_folder
+Também aceita layouts legados (``cardholder`` em vez de ``cardholdername``,
+``totp`` em vez de ``additional_urls``, ausência de ``type``/``note_date``).
 
 Quando ``type`` está ausente ou vazio, a categoria é inferida pelo conteúdo:
     cardnumber preenchido → CREDIT_CARD
@@ -62,7 +57,7 @@ class NordPassImporter(Importer):
 
     @property
     def supports_timestamps(self) -> bool:
-        return True  # campo note_date quando presente
+        return True  # campo note_date quando presente em exports legados
 
     def parse(self, path: Path) -> list[CanonicalItem]:
         items: list[CanonicalItem] = []
@@ -84,6 +79,7 @@ class NordPassImporter(Importer):
             category = _infer_category(row)
 
         title = (row.get("name") or "").strip() or f"NordPass item {idx + 1}"
+        # note_date presente em exports legados
         updated_at = _parse_date(row.get("note_date") or "")
 
         source_ref = SourceRef(source="nordpass")
@@ -92,27 +88,32 @@ class NordPassImporter(Importer):
         if category == Category.LOGIN:
             fields["username"] = row.get("username") or ""
             fields["password"] = row.get("password") or ""
-            fields["url"] = row.get("url") or ""
+            fields["url"]      = row.get("url") or ""
+            if row.get("additional_urls"):
+                fields["urls_additional"] = row["additional_urls"]
+            # legado: coluna totp em exports antigos
             if row.get("totp"):
                 fields["otp"] = row["totp"]
 
         elif category == Category.CREDIT_CARD:
-            # aceita tanto "cardholdername" (template oficial) como "cardholder" (export legado)
+            # aceita "cardholdername" (atual) e "cardholder" (legado)
             fields["cardholder"] = row.get("cardholdername") or row.get("cardholder") or ""
-            fields["number"] = row.get("cardnumber") or ""
-            fields["cvv"] = row.get("cvc") or ""
+            fields["number"]     = row.get("cardnumber") or ""
+            fields["cvv"]        = row.get("cvc") or ""
             fields["expiration"] = row.get("expirydate") or ""
-            fields["zip"] = row.get("zipcode") or ""
+            fields["zip"]        = row.get("zipcode") or ""
+            if row.get("pin"):
+                fields["pin"] = row["pin"]
 
         elif category == Category.IDENTITY:
             fields["first_name"] = row.get("full_name") or ""
-            fields["email"] = row.get("email") or ""
-            fields["phone"] = row.get("phone_number") or ""
-            fields["address1"] = row.get("address1") or ""
-            fields["address2"] = row.get("address2") or ""
-            fields["city"] = row.get("city") or ""
-            fields["state"] = row.get("state") or ""
-            fields["country"] = row.get("country") or ""
+            fields["email"]      = row.get("email") or ""
+            fields["phone"]      = row.get("phone_number") or ""
+            fields["address1"]   = row.get("address1") or ""
+            fields["address2"]   = row.get("address2") or ""
+            fields["city"]       = row.get("city") or ""
+            fields["state"]      = row.get("state") or ""
+            fields["country"]    = row.get("country") or ""
 
         elif category == Category.SECURE_NOTE:
             fields["body"] = row.get("note") or ""
@@ -127,12 +128,8 @@ class NordPassImporter(Importer):
                 cf_list = json.loads(raw_cf)
                 if isinstance(cf_list, list):
                     for entry in cf_list:
-                        if not isinstance(entry, dict):
-                            continue
-                        label = (entry.get("label") or "").strip()
-                        value = entry.get("value") or ""
-                        if label:
-                            extras[label] = value
+                        if isinstance(entry, dict):
+                            extras.update(entry)
             except (json.JSONDecodeError, ValueError):
                 pass
 

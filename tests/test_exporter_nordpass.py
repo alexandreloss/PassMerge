@@ -102,20 +102,53 @@ class TestNordPassExporter(unittest.TestCase):
         for col in _COLUMNS:
             self.assertIn(col, header)
 
-    def test_no_type_column(self):
+    def test_type_column_login(self):
         content, _ = self._export([_login()])
-        header = content.splitlines()[0]
-        self.assertNotIn('"type"', header)
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["type"], "password")
 
-    def test_totp_exported(self):
+    def test_type_column_credit_card(self):
+        content, _ = self._export([_card()])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["type"], "credit_card")
+
+    def test_type_column_secure_note(self):
+        content, _ = self._export([_note()])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["type"], "note")
+
+    def test_type_column_identity(self):
+        content, _ = self._export([_identity()])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["type"], "identity")
+
+    def test_type_column_unsupported_falls_back_to_password(self):
+        content, _ = self._export([_server()])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["type"], "password")
+
+    def test_additional_urls_exported(self):
         item = CanonicalItem(
             category=Category.LOGIN, title="GitHub",
-            fields={"username": "alice", "password": "pass", "otp": "otpauth://totp/x"},
+            fields={"username": "alice", "password": "pass",
+                    "url": "https://github.com",
+                    "urls_additional": "https://github.com/login"},
             sources=[SourceRef(source="test")],
         )
         content, _ = self._export([item])
         rows = list(csv.DictReader(content.splitlines()))
-        self.assertEqual(rows[0]["totp"], "otpauth://totp/x")
+        self.assertEqual(rows[0]["additional_urls"], "https://github.com/login")
+
+    def test_pin_exported_for_credit_card(self):
+        item = CanonicalItem(
+            category=Category.CREDIT_CARD, title="Visa",
+            fields={"cardholder": "Alice", "number": "4111111111111111",
+                    "cvv": "123", "expiration": "12/2030", "zip": "12345", "pin": "1234"},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["pin"], "1234")
 
     def test_unicode_preserved(self):
         content, _ = self._export([_login(username="usuário", password="sênha")])
@@ -153,7 +186,7 @@ class TestNordPassExporter(unittest.TestCase):
         item = CanonicalItem(
             category=Category.LOGIN, title="WithExtras",
             fields={"username": "u", "password": "p", "url": "https://x.com"},
-            extras={"Chave de Segurança": "IBH", "Token": "abc"},
+            extras={"type": "hidden", "label": "Chave de Segurança", "value": "IBH"},
             sources=[SourceRef(source="test")],
         )
         content, _ = self._export([item])
@@ -161,8 +194,9 @@ class TestNordPassExporter(unittest.TestCase):
         cf = json.loads(rows[0]["custom_fields"])
         self.assertIsInstance(cf, list)
         self.assertEqual(len(cf), 1)
-        self.assertEqual(cf[0]["Chave de Segurança"], "IBH")
-        self.assertEqual(cf[0]["Token"], "abc")
+        self.assertEqual(cf[0]["type"], "hidden")
+        self.assertEqual(cf[0]["label"], "Chave de Segurança")
+        self.assertEqual(cf[0]["value"], "IBH")
 
     def test_empty_extras_produces_empty_custom_fields(self):
         content, _ = self._export([_login()])

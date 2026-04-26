@@ -1,10 +1,10 @@
 """Exporter para o formato CSV do NordPass.
 
-Segue o template oficial de import do NordPass::
+Segue a estrutura real e atualizada do NordPass::
 
-    name,url,username,password,note,cardholdername,cardnumber,cvc,expirydate,
-    zipcode,folder,full_name,phone_number,email,address1,address2,city,
-    country,state,totp,shared_folder
+    name,url,additional_urls,username,password,note,cardholdername,cardnumber,
+    cvc,pin,expirydate,zipcode,folder,shared_folder,full_name,phone_number,
+    email,address1,address2,city,country,state,type,custom_fields
 """
 from __future__ import annotations
 
@@ -13,15 +13,16 @@ import json
 from pathlib import Path
 
 from ..core.canonical import CanonicalItem, Category
+from ..core.categories import CANONICAL_TO_NORDPASS
 from .base import ExportReport, Exporter
 
-# Colunas na ordem exata do template oficial do NordPass
+# Colunas na ordem exata do formato atual do NordPass
 _COLUMNS = [
-    "name", "url", "username", "password", "note",
-    "cardholdername", "cardnumber", "cvc", "expirydate", "zipcode",
-    "folder", "full_name", "phone_number", "email",
+    "name", "url", "additional_urls", "username", "password", "note",
+    "cardholdername", "cardnumber", "cvc", "pin", "expirydate", "zipcode",
+    "folder", "shared_folder", "full_name", "phone_number", "email",
     "address1", "address2", "city", "country", "state",
-    "totp", "shared_folder", "custom_fields",
+    "type", "custom_fields",
 ]
 
 
@@ -30,19 +31,21 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
     base: dict[str, str] = {
         "name":   item.title,
         "folder": item.tags[0] if item.tags else (item.folder or ""),
+        "type":   CANONICAL_TO_NORDPASS.get(item.category, "password"),
     }
 
     if item.category == Category.LOGIN:
-        base["url"]      = f.get("url") or ""
-        base["username"] = f.get("username") or ""
-        base["password"] = f.get("password") or ""
-        base["note"]     = item.notes or ""
-        base["totp"]     = f.get("otp") or ""
+        base["url"]             = f.get("url") or ""
+        base["additional_urls"] = f.get("urls_additional") or ""
+        base["username"]        = f.get("username") or ""
+        base["password"]        = f.get("password") or ""
+        base["note"]            = item.notes or ""
 
     elif item.category == Category.CREDIT_CARD:
         base["cardholdername"] = f.get("cardholder") or ""
         base["cardnumber"]     = f.get("number") or ""
         base["cvc"]            = f.get("cvv") or ""
+        base["pin"]            = f.get("pin") or ""
         base["expirydate"]     = f.get("expiration") or ""
         base["zipcode"]        = f.get("zip") or ""
         base["note"]           = item.notes or ""
