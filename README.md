@@ -55,8 +55,15 @@ Todos os argumentos de fonte são opcionais — informe ao menos um:
         --kaspersky   kaspersky_export.txt \
         --vault       meu_vault.json
 
-Se o vault ainda não existir, ele é criado automaticamente. Com ≥2 fontes,
-o merger agrupa duplicatas e resolve conflitos automaticamente.
+Se o vault ainda não existir, ele é criado automaticamente.
+
+> **Importante — passe todas as fontes em uma única chamada.**
+> O merge e a deduplicação só ocorrem quando ≥2 fontes são fornecidas
+> **ao mesmo tempo**. Importar cada fonte separadamente em chamadas
+> individuais não dispara o merger — os itens são simplesmente
+> concatenados ao vault sem deduplicar, gerando duplicatas entre fontes.
+> A ordem dos argumentos não afeta o resultado; a prioridade é sempre
+> `nordpass > 1password > chrome > applesenhas > kaspersky`.
 
 ### Como exportar do Apple Passwords (iPhone/macOS)
 

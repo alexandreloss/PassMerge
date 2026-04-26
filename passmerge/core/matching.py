@@ -44,6 +44,18 @@ def _sha256_prefix(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
+def _f(item: CanonicalItem, field_key: str, *extra_keys: str) -> str:
+    """Retorna valor normalizado de fields[field_key] ou, se vazio, do primeiro extra_key não-vazio."""
+    val = _norm(item.fields.get(field_key) or "")
+    if val:
+        return val
+    for ek in extra_keys:
+        val = _norm(item.extras.get(ek) or "")
+        if val:
+            return val
+    return ""
+
+
 def primary_key(item: CanonicalItem) -> str:
     """Retorna a chave primária canônica do item.
 
@@ -59,16 +71,16 @@ def primary_key(item: CanonicalItem) -> str:
         return f"login|{domain}|{username}"
 
     if cat == Category.CREDIT_CARD:
-        raw_number = _norm(f.get("number") or "")
-        last4 = raw_number[-4:] if len(raw_number) >= 4 else raw_number
-        cardholder = _norm(f.get("cardholder") or "")
-        return f"cc|{last4}|{cardholder}"
+        # número completo; fallback para "número" (pt) quando não mapeado pelo importer
+        number = _f(item, "number", "número", "numero")
+        cardholder = _f(item, "cardholder", "titular", "portador")
+        return f"cc|{number}|{cardholder}"
 
     if cat == Category.SERVER:
-        host = _norm(f.get("hostname") or "")
-        user = _norm(f.get("username") or "")
-        port = _norm(f.get("port") or "")
-        return f"server|{host}|{user}|{port}"
+        # fallback para campos pt: "url" como host, "nome de usuário"
+        host = _f(item, "hostname", "url", "servidor")
+        user = _f(item, "username", "nome de usuário", "nome de usuario")
+        return f"server|{host}|{user}"
 
     if cat == Category.SECURE_NOTE:
         title = _norm(item.title)
@@ -90,13 +102,15 @@ def primary_key(item: CanonicalItem) -> str:
         return f"license|{product}|{key}"
 
     if cat == Category.DATABASE:
-        host = _norm(f.get("hostname") or "")
-        db = _norm(f.get("database") or "")
-        user = _norm(f.get("username") or "")
+        # fallback para campos pt: "servidor", "tipo" (type/db name), "nome de usuário"
+        host = _f(item, "hostname", "servidor")
+        db   = _f(item, "database", "tipo", "nome do banco", "nome do banco de dados")
+        user = _f(item, "username", "nome de usuário", "nome de usuario")
         return f"db|{host}|{db}|{user}"
 
     if cat == Category.WIRELESS:
-        ssid = _norm(f.get("ssid") or "")
+        # fallback para campo pt: "nome da rede"
+        ssid = _f(item, "ssid", "nome da rede")
         return f"wifi|{ssid}"
 
     # OTHER e fallback
