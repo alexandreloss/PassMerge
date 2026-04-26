@@ -1,7 +1,7 @@
 # PassMerge - Fase 4 (Exporters)
 
-Consolidador local de credenciais entre Google/Chrome, NordPass, 1Password e
-Kaspersky Password Manager.
+Consolidador local de credenciais entre Google/Chrome, NordPass, 1Password,
+Apple Passwords e Kaspersky Password Manager.
 
 > **Aviso de segurança:** este utilitário lê e grava credenciais em **texto
 > plano**. Use exclusivamente em máquina própria e confiável e apague os
@@ -99,7 +99,7 @@ EMAIL_ACCOUNT, API_CREDENTIAL, MEDICAL_RECORD, CRYPTO_WALLET, DOCUMENT, OTHER.
 
 > **Nota 1Password:** itens com `state = "archived"` são ignorados na importação.
 
-###  de comando completo
+### Exemplo de comando completo
 
     python -m passmerge import \
         --onepassword C:\Senhas\1Password.1pux  \
@@ -177,7 +177,7 @@ listados no terminal (motivo: `unsupported_category`).
       cli.py                   # argparse + todos os comandos
       core/
         canonical.py           # Vault, CanonicalItem, Category (22 valores), SourceRef
-        categories.py          # mapeamento canônico ↔ nativo (4 gerenciadores)
+        categories.py          # mapeamento canônico ↔ nativo (5 gerenciadores)
         normalize.py           # normalize_url, normalize_email, normalize_phone
         matching.py            # primary_key por categoria (deduplicação)
         conflict.py            # ConflictLog, ReviewConflict (JSON formatado para revisão humana)
@@ -205,6 +205,7 @@ listados no terminal (motivo: `unsupported_category`).
         nordpass_test.csv
         onepassword_test.1pux
         kaspersky_test.txt
+        apple_test.csv
         make_onepassword_fixture.py   # gerador da fixture .1pux
       test_canonical.py
       test_phase1_acceptance.py
@@ -228,7 +229,7 @@ listados no terminal (motivo: `unsupported_category`).
 
     python -m unittest discover -s tests -v
 
-Resultado esperado: **273 testes, todos OK**.
+Resultado esperado: **288 testes, todos OK**.
 
 ## Merge: como funciona
 
@@ -240,20 +241,26 @@ Itens de todas as fontes são agrupados pela chave `(categoria, primary_key)`.
 A `primary_key` é calculada por categoria a partir dos campos canônicos,
 sempre normalizados (lowercase, strip, colapso de espaços internos):
 
-| Categoria | Chave primária |
-|---|---|
-| LOGIN | `domínio_da_url` + `username` |
-| CREDIT_CARD | `últimos 4 dígitos` + `cardholder` |
-| SERVER | `hostname` + `username` + `port` |
-| SECURE_NOTE | `title` + `hash(body[:256])` |
-| IDENTITY | `email` — ou `first_name` + `last_name` + `phone` |
-| SOFTWARE_LICENSE | `product` + `license_key` |
-| DATABASE | `hostname` + `database` + `username` |
-| WIRELESS | `ssid` |
-| demais / OTHER | `title` |
+| Categoria | Chave primária | Observação |
+|---|---|---|
+| LOGIN | `origin(url)` + `username` | origin = `scheme://host` sem path/query; `www.` removido¹ |
+| CREDIT_CARD | `número completo` + `cardholder` | fallback: `extras["número"]` / `extras["titular"]` |
+| SERVER | `hostname` + `username` | porta ignorada; fallback: `extras["url"]`/`extras["servidor"]` + `extras["nome de usuário"]` |
+| SECURE_NOTE | `title` + `hash(body[:256])` | |
+| IDENTITY | `email` — ou `first_name` + `last_name` + `phone` | |
+| SOFTWARE_LICENSE | `product` + `license_key` | |
+| DATABASE | `hostname` + `database` + `username` | fallback: `extras["servidor"]` + `extras["tipo"]` + `extras["nome de usuário"]` |
+| WIRELESS | `ssid` | fallback: `extras["nome da rede"]` |
+| demais / OTHER | `title` | PASSWORD, BANK_ACCOUNT, MEMBERSHIP, PASSPORT, etc. |
+
+¹ Exemplos de normalização de URL para LOGIN:
+- `https://prd-aa1.lg.com.br/Autoatendimento/index.html?id=1` → `https://prd-aa1.lg.com.br`
+- `https://www.aa.com/homePage.do` → `https://aa.com`
+- `http://visabenefits.force.com/webportal/` → `http://visabenefits.force.com`
 
 > Itens de categorias diferentes nunca colidem mesmo que os campos coincidam.
-> URLs são normalizadas extraindo apenas o netloc (`www.` removido).
+> Campos não mapeados pelo importer (ex.: nomes de campos em português no .1pux)
+> são armazenados em `extras` e usados como fallback na chave primária.
 
 ### 2. Eleição do vencedor
 
