@@ -15,7 +15,6 @@ import hashlib
 import re
 
 from .canonical import CanonicalItem, Category
-from .normalize import normalize_url
 
 _WS = re.compile(r"\s+")
 
@@ -27,15 +26,33 @@ def _norm(value: str | None) -> str:
     return _WS.sub(" ", str(value).strip().lower())
 
 
-def _domain(url: str | None) -> str:
-    """Extrai o netloc normalizado de uma URL."""
-    if not url:
+def _origin(url: str | None) -> str:
+    """Extrai o origin normalizado (scheme://netloc) de uma URL.
+
+    Normalização aplicada:
+      - scheme e netloc convertidos para minúsculas
+      - prefixo "www." removido do netloc (https://www.aa.com == https://aa.com)
+      - path, query e fragmento descartados
+
+    Exemplos:
+      https://prd-aa1.lg.com.br/Autoatendimento/index.html?id=1  →  https://prd-aa1.lg.com.br
+      https://www.aa.com/homePage.do                              →  https://aa.com
+      http://visabenefits.force.com/webportal/                    →  http://visabenefits.force.com
+    """
+    if not url or not url.strip():
         return ""
-    normalized = normalize_url(url)
-    # normalize_url devolve URL completa; extraímos só o netloc
-    from urllib.parse import urlparse
+    raw = url.strip()
+    if "://" not in raw:
+        raw = "https://" + raw
     try:
-        return urlparse(normalized).netloc.lower().lstrip("www.") or _norm(url)
+        from urllib.parse import urlparse
+        parts = urlparse(raw)
+        netloc = parts.netloc.lower()
+        if not netloc:
+            return _norm(url)
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        return f"{parts.scheme.lower()}://{netloc}"
     except Exception:
         return _norm(url)
 
@@ -66,7 +83,7 @@ def primary_key(item: CanonicalItem) -> str:
     cat = item.category
 
     if cat == Category.LOGIN:
-        domain = _domain(f.get("url") or "")
+        domain = _origin(f.get("url") or "")
         username = _norm(f.get("username") or "")
         return f"login|{domain}|{username}"
 

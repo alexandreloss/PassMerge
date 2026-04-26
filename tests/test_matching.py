@@ -68,9 +68,33 @@ def _wifi(ssid="") -> CanonicalItem:
 
 
 class TestLoginKey(unittest.TestCase):
-    def test_same_domain_variants_same_key(self):
+    def test_path_and_query_ignored(self):
+        # path, query e fragmento não fazem parte da chave
+        a = _login("https://prd-aa1.lg.com.br/Autoatendimento/index.html?id=1447&uid=448165025", "alice")
+        b = _login("https://prd-aa1.lg.com.br/outra/pagina", "alice")
+        self.assertEqual(primary_key(a), primary_key(b))
+
+    def test_www_normalized(self):
+        # www. é removido — https://www.aa.com == https://aa.com
+        a = _login("https://www.aa.com/homePage.do", "alice")
+        b = _login("https://aa.com/homePage.do",     "alice")
+        self.assertEqual(primary_key(a), primary_key(b))
+
+    def test_subdomain_preserved(self):
+        # subdomínio completo é preservado
+        a = _login("https://prd-aa1.lg.com.br/path", "alice")
+        b = _login("https://lg.com.br/path",          "alice")
+        self.assertNotEqual(primary_key(a), primary_key(b))
+
+    def test_scheme_preserved(self):
+        # scheme faz parte da chave
+        a = _login("https://visabenefits.force.com/webportal/", "alice")
+        b = _login("http://visabenefits.force.com/webportal/",  "alice")
+        self.assertNotEqual(primary_key(a), primary_key(b))
+
+    def test_same_origin_same_key(self):
         a = _login("https://github.com/login", "alice@example.com")
-        b = _login("http://www.github.com",    "alice@example.com")
+        b = _login("https://github.com/other", "alice@example.com")
         self.assertEqual(primary_key(a), primary_key(b))
 
     def test_different_username_different_key(self):
@@ -78,14 +102,19 @@ class TestLoginKey(unittest.TestCase):
         b = _login("https://github.com", "bob@example.com")
         self.assertNotEqual(primary_key(a), primary_key(b))
 
-    def test_different_domain_different_key(self):
-        a = _login("https://github.com",  "alice@example.com")
-        b = _login("https://gitlab.com",  "alice@example.com")
+    def test_different_origin_different_key(self):
+        a = _login("https://github.com", "alice@example.com")
+        b = _login("https://gitlab.com", "alice@example.com")
         self.assertNotEqual(primary_key(a), primary_key(b))
 
     def test_username_case_insensitive(self):
         a = _login("https://github.com", "Alice@Example.COM")
         b = _login("https://github.com", "alice@example.com")
+        self.assertEqual(primary_key(a), primary_key(b))
+
+    def test_origin_case_insensitive(self):
+        a = _login("HTTPS://GitHub.COM/login", "alice")
+        b = _login("https://github.com/other", "alice")
         self.assertEqual(primary_key(a), primary_key(b))
 
     def test_empty_url_still_produces_key(self):
