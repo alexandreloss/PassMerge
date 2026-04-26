@@ -159,6 +159,18 @@ class TestNordPassEdgeCases(unittest.TestCase):
         finally:
             p.unlink(missing_ok=True)
 
+    def test_folder_type_ignored(self):
+        p = _write_csv([
+            "Pasta Trabalho,,,,,,,,,,,,,,,,,,,folder,",
+            "GitHub,https://github.com,alice,pass,,,,,,,,,,,,,,,,password,",
+        ])
+        try:
+            items = self.imp.parse(p)
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0].title, "GitHub")
+        finally:
+            p.unlink(missing_ok=True)
+
     def test_comma_in_note_handled(self):
         p = _write_csv([
             '"NoteTitle",,,,"Linha 1, Linha 2, Linha 3",,,,,,,,,,,,,,,note,2024-01-01'

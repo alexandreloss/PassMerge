@@ -75,6 +75,8 @@ class NordPassImporter(Importer):
 
     def _parse_row(self, row: dict[str, str], idx: int) -> CanonicalItem | None:
         raw_type = (row.get("type") or "").strip().lower()
+        if raw_type == "folder":
+            return None
         if raw_type:
             category = NORDPASS_TO_CANONICAL.get(raw_type, Category.OTHER)
         else:
