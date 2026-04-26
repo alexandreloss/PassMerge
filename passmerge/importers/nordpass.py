@@ -23,6 +23,7 @@ Quando ``type`` está ausente ou vazio, a categoria é inferida pelo conteúdo:
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from typing import Any
 
@@ -119,10 +120,27 @@ class NordPassImporter(Importer):
         folder: str | None = (row.get("folder") or "").strip() or None
         notes = "" if category == Category.SECURE_NOTE else (row.get("note") or "")
 
+        extras: dict[str, Any] = {}
+        raw_cf = (row.get("custom_fields") or "").strip()
+        if raw_cf:
+            try:
+                cf_list = json.loads(raw_cf)
+                if isinstance(cf_list, list):
+                    for entry in cf_list:
+                        if not isinstance(entry, dict):
+                            continue
+                        label = (entry.get("label") or "").strip()
+                        value = entry.get("value") or ""
+                        if label:
+                            extras[label] = value
+            except (json.JSONDecodeError, ValueError):
+                pass
+
         return CanonicalItem(
             category=category,
             title=title,
             fields=fields,
+            extras=extras,
             folder=folder,
             updated_at=updated_at,
             sources=[source_ref],

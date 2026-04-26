@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -147,6 +148,26 @@ class TestNordPassExporter(unittest.TestCase):
         content, _ = self._export([_login()])
         rows = list(csv.DictReader(content.splitlines()))
         self.assertEqual(rows[0]["folder"], "")
+
+    def test_extras_serialized_to_custom_fields(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="WithExtras",
+            fields={"username": "u", "password": "p", "url": "https://x.com"},
+            extras={"Chave de Segurança": "IBH", "Token": "abc"},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        cf = json.loads(rows[0]["custom_fields"])
+        self.assertIsInstance(cf, list)
+        self.assertEqual(len(cf), 1)
+        self.assertEqual(cf[0]["Chave de Segurança"], "IBH")
+        self.assertEqual(cf[0]["Token"], "abc")
+
+    def test_empty_extras_produces_empty_custom_fields(self):
+        content, _ = self._export([_login()])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["custom_fields"], "")
 
 
 if __name__ == "__main__":

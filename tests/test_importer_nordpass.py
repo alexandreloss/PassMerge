@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -179,6 +180,104 @@ class TestNordPassEdgeCases(unittest.TestCase):
             items = self.imp.parse(p)
             self.assertEqual(len(items), 1)
             self.assertIn("Linha 2", items[0].fields["body"])
+        finally:
+            p.unlink(missing_ok=True)
+
+
+_CF_COLUMNS = [
+    "name", "url", "username", "password", "note", "cardholder", "cardnumber",
+    "cvc", "expirydate", "zipcode", "folder", "full_name", "phone_number",
+    "email", "address1", "address2", "city", "country", "state",
+    "type", "note_date", "custom_fields",
+]
+
+
+def _write_csv_cf(rows: list[dict]) -> Path:
+    """Escreve CSV com coluna custom_fields usando csv.writer (valores seguros)."""
+    import csv as _csv
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".csv", encoding="utf-8", delete=False, newline=""
+    )
+    writer = _csv.DictWriter(tmp, fieldnames=_CF_COLUMNS,
+                             extrasaction="ignore", quoting=_csv.QUOTE_ALL)
+    writer.writeheader()
+    for r in rows:
+        row = {col: "" for col in _CF_COLUMNS}
+        row.update(r)
+        writer.writerow(row)
+    tmp.close()
+    return Path(tmp.name)
+
+
+class TestNordPassCustomFields(unittest.TestCase):
+    def setUp(self):
+        self.imp = NordPassImporter()
+
+    def test_custom_fields_parsed_into_extras(self):
+        cf = json.dumps([{"type": "hidden", "label": "Chave de Segurança", "value": "IBH"}])
+        p = _write_csv_cf([{
+            "name": "MyLogin", "url": "https://x.com",
+            "username": "user", "password": "pass",
+            "type": "password", "custom_fields": cf,
+        }])
+        try:
+            items = self.imp.parse(p)
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0].extras.get("Chave de Segurança"), "IBH")
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_multiple_custom_fields(self):
+        cf = json.dumps([
+            {"type": "text", "label": "Campo1", "value": "Valor1"},
+            {"type": "hidden", "label": "Campo2", "value": "Valor2"},
+        ])
+        p = _write_csv_cf([{
+            "name": "MyLogin", "url": "https://x.com",
+            "username": "user", "password": "pass",
+            "type": "password", "custom_fields": cf,
+        }])
+        try:
+            items = self.imp.parse(p)
+            self.assertEqual(items[0].extras.get("Campo1"), "Valor1")
+            self.assertEqual(items[0].extras.get("Campo2"), "Valor2")
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_empty_custom_fields_produces_empty_extras(self):
+        p = _write_csv_cf([{
+            "name": "MyLogin", "url": "https://x.com",
+            "username": "user", "password": "pass",
+            "type": "password", "custom_fields": "",
+        }])
+        try:
+            items = self.imp.parse(p)
+            self.assertEqual(items[0].extras, {})
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_invalid_custom_fields_json_ignored(self):
+        p = _write_csv_cf([{
+            "name": "MyLogin", "url": "https://x.com",
+            "username": "user", "password": "pass",
+            "type": "password", "custom_fields": "not-json",
+        }])
+        try:
+            items = self.imp.parse(p)
+            self.assertEqual(items[0].extras, {})
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_entry_without_label_skipped(self):
+        cf = json.dumps([{"type": "hidden", "value": "IBH"}])
+        p = _write_csv_cf([{
+            "name": "MyLogin", "url": "https://x.com",
+            "username": "user", "password": "pass",
+            "type": "password", "custom_fields": cf,
+        }])
+        try:
+            items = self.imp.parse(p)
+            self.assertEqual(items[0].extras, {})
         finally:
             p.unlink(missing_ok=True)
 

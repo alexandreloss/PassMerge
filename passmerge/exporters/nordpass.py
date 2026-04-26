@@ -9,6 +9,7 @@ Segue o template oficial de import do NordPass::
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from ..core.canonical import CanonicalItem, Category
@@ -20,7 +21,7 @@ _COLUMNS = [
     "cardholdername", "cardnumber", "cvc", "expirydate", "zipcode",
     "folder", "full_name", "phone_number", "email",
     "address1", "address2", "city", "country", "state",
-    "totp", "shared_folder",
+    "totp", "shared_folder", "custom_fields",
 ]
 
 
@@ -65,6 +66,11 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["username"] = f.get("username") or ""
         base["password"] = f.get("password") or ""
         base["note"]     = item.notes or ""
+
+    if item.extras:
+        base["custom_fields"] = json.dumps(
+            [item.extras], ensure_ascii=False, separators=(",", ":")
+        )
 
     return base
 
