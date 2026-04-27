@@ -253,6 +253,31 @@ class TestNordPassExporter(unittest.TestCase):
         rows = list(csv.DictReader(content.splitlines()))
         self.assertEqual(rows[0]["custom_fields"], "")
 
+    def test_losers_key_excluded_from_custom_fields(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="WithLosers",
+            fields={"username": "u", "password": "p", "url": "https://x.com"},
+            extras={"Apelido": "xpto", "_losers": [{"source": "chrome", "field": "password"}]},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        cf = json.loads(rows[0]["custom_fields"])
+        labels = [e["label"] for e in cf]
+        self.assertIn("Apelido", labels)
+        self.assertNotIn("_losers", labels)
+
+    def test_only_losers_in_extras_produces_empty_custom_fields(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="OnlyLosers",
+            fields={"username": "u", "password": "p", "url": "https://x.com"},
+            extras={"_losers": [{"source": "chrome", "field": "password"}]},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["custom_fields"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

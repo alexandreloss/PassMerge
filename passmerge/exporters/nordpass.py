@@ -91,9 +91,10 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["password"] = f.get("password") or ""
         base["note"]     = item.notes or ""
 
-    if item.extras:
+    exportable_extras = {k: v for k, v in item.extras.items() if k != "_losers"}
+    if exportable_extras:
         cf = [{"type": _cf_type(k), "label": k, "value": str(v)}
-              for k, v in item.extras.items()]
+              for k, v in exportable_extras.items()]
         base["custom_fields"] = json.dumps(cf, ensure_ascii=False, separators=(",", ":"))
 
     return base
