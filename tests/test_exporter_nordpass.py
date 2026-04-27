@@ -76,6 +76,70 @@ class TestNordPassExporter(unittest.TestCase):
         self.assertEqual(rows[0]["cardholdername"], "Alice")
         self.assertEqual(rows[0]["cardnumber"], "4111111111111111")
 
+    def test_credit_card_extras_fallback(self):
+        item = CanonicalItem(
+            category=Category.CREDIT_CARD, title="Visa",
+            fields={},
+            extras={
+                "nome do titular": "João Silva",
+                "número": "5500000000000004",
+                "número de verificação": "999",
+            },
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["cardholdername"], "João Silva")
+        self.assertEqual(rows[0]["cardnumber"], "5500000000000004")
+        self.assertEqual(rows[0]["cvc"], "999")
+
+    def test_credit_card_expiry_from_extras_yyyymm(self):
+        item = CanonicalItem(
+            category=Category.CREDIT_CARD, title="Visa",
+            fields={},
+            extras={"data de validade": "202612"},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        from datetime import datetime, timezone
+        expected = str(int(datetime(2026, 12, 1, tzinfo=timezone.utc).timestamp()))
+        self.assertEqual(rows[0]["expirydate"], expected)
+
+    def test_credit_card_extras_not_in_custom_fields(self):
+        item = CanonicalItem(
+            category=Category.CREDIT_CARD, title="Visa",
+            fields={},
+            extras={
+                "nome do titular": "João Silva",
+                "número": "5500000000000004",
+                "número de verificação": "999",
+                "data de validade": "202612",
+                "Observação": "cartão pessoal",
+            },
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        cf = json.loads(rows[0]["custom_fields"])
+        labels = [e["label"] for e in cf]
+        self.assertNotIn("nome do titular", labels)
+        self.assertNotIn("número", labels)
+        self.assertNotIn("número de verificação", labels)
+        self.assertNotIn("data de validade", labels)
+        self.assertIn("Observação", labels)
+
+    def test_credit_card_canonical_expiry_takes_priority(self):
+        item = CanonicalItem(
+            category=Category.CREDIT_CARD, title="Visa",
+            fields={"expiration": "2026-12"},
+            extras={"data de validade": "202601"},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        self.assertEqual(rows[0]["expirydate"], "2026-12")
+
     def test_secure_note_exported(self):
         content, report = self._export([_note()])
         rows = list(csv.DictReader(content.splitlines()))

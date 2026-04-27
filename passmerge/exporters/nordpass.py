@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..core.canonical import CanonicalItem, Category
@@ -28,6 +29,18 @@ _HIDDEN_WORDS = {
 _DATE_WORDS = {"data", "tempo", "time", "date", "timestamp"}
 
 
+def _yyyymm_to_unix(raw: str) -> str:
+    """Converts a YYYYMM string to a Unix timestamp string (first day of the month, UTC)."""
+    raw = raw.strip()
+    if len(raw) == 6 and raw.isdigit():
+        try:
+            dt = datetime(int(raw[:4]), int(raw[4:]), 1, tzinfo=timezone.utc)
+            return str(int(dt.timestamp()))
+        except ValueError:
+            pass
+    return raw
+
+
 def _cf_type(label: str) -> str:
     lower = label.lower()
     if any(w in lower for w in _HIDDEN_WORDS):
@@ -36,6 +49,12 @@ def _cf_type(label: str) -> str:
         return "date"
     return "text"
 
+
+# Chaves de extras que já foram promovidas a colunas canônicas — não vão para custom_fields
+_EXTRAS_SKIP = {
+    "_losers",
+    "nome do titular", "número", "número de verificação", "data de validade",
+}
 
 # Colunas na ordem exata do formato atual do NordPass
 _COLUMNS = [
@@ -63,11 +82,15 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["note"]            = item.notes or ""
 
     elif item.category == Category.CREDIT_CARD:
-        base["cardholdername"] = f.get("cardholder") or ""
-        base["cardnumber"]     = f.get("number") or ""
-        base["cvc"]            = f.get("cvv") or ""
+        x = item.extras
+        base["cardholdername"] = f.get("cardholder") or x.get("nome do titular") or ""
+        base["cardnumber"]     = f.get("number") or x.get("número") or ""
+        base["cvc"]            = f.get("cvv") or x.get("número de verificação") or ""
         base["pin"]            = f.get("pin") or ""
-        base["expirydate"]     = f.get("expiration") or ""
+        raw_expiry = f.get("expiration") or ""
+        if not raw_expiry:
+            raw_expiry = _yyyymm_to_unix(x.get("data de validade") or "")
+        base["expirydate"]     = raw_expiry
         base["zipcode"]        = f.get("zip") or ""
         base["note"]           = item.notes or ""
 
@@ -91,7 +114,7 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["password"] = f.get("password") or ""
         base["note"]     = item.notes or ""
 
-    exportable_extras = {k: v for k, v in item.extras.items() if k != "_losers"}
+    exportable_extras = {k: v for k, v in item.extras.items() if k not in _EXTRAS_SKIP}
     if exportable_extras:
         cf = [{"type": _cf_type(k), "label": k, "value": str(v)}
               for k, v in exportable_extras.items()]
