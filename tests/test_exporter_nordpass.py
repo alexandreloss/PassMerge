@@ -182,11 +182,11 @@ class TestNordPassExporter(unittest.TestCase):
         rows = list(csv.DictReader(content.splitlines()))
         self.assertEqual(rows[0]["folder"], "")
 
-    def test_extras_serialized_to_custom_fields(self):
+    def test_extras_single_field_to_custom_fields(self):
         item = CanonicalItem(
             category=Category.LOGIN, title="WithExtras",
             fields={"username": "u", "password": "p", "url": "https://x.com"},
-            extras={"type": "hidden", "label": "Chave de Segurança", "value": "IBH"},
+            extras={"Chave de Segurança": "IBH"},
             sources=[SourceRef(source="test")],
         )
         content, _ = self._export([item])
@@ -194,9 +194,25 @@ class TestNordPassExporter(unittest.TestCase):
         cf = json.loads(rows[0]["custom_fields"])
         self.assertIsInstance(cf, list)
         self.assertEqual(len(cf), 1)
-        self.assertEqual(cf[0]["type"], "hidden")
+        self.assertEqual(cf[0]["type"], "text")
         self.assertEqual(cf[0]["label"], "Chave de Segurança")
         self.assertEqual(cf[0]["value"], "IBH")
+
+    def test_extras_multiple_fields_to_custom_fields(self):
+        item = CanonicalItem(
+            category=Category.LOGIN, title="WithExtras",
+            fields={"username": "u", "password": "p", "url": "https://x.com"},
+            extras={"Chave de Segurança": "IBH", "Token": "abc123"},
+            sources=[SourceRef(source="test")],
+        )
+        content, _ = self._export([item])
+        rows = list(csv.DictReader(content.splitlines()))
+        cf = json.loads(rows[0]["custom_fields"])
+        self.assertEqual(len(cf), 2)
+        labels = {e["label"]: e["value"] for e in cf}
+        self.assertEqual(labels["Chave de Segurança"], "IBH")
+        self.assertEqual(labels["Token"], "abc123")
+        self.assertTrue(all(e["type"] == "text" for e in cf))
 
     def test_empty_extras_produces_empty_custom_fields(self):
         content, _ = self._export([_login()])

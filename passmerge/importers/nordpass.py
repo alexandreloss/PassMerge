@@ -128,8 +128,12 @@ class NordPassImporter(Importer):
                 cf_list = json.loads(raw_cf)
                 if isinstance(cf_list, list):
                     for entry in cf_list:
-                        if isinstance(entry, dict):
-                            extras.update(entry)
+                        if not isinstance(entry, dict):
+                            continue
+                        label = (entry.get("label") or "").strip()
+                        value = entry.get("value") or ""
+                        if label:
+                            extras[label] = value
             except (json.JSONDecodeError, ValueError):
                 pass
 

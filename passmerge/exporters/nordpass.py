@@ -71,9 +71,9 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["note"]     = item.notes or ""
 
     if item.extras:
-        base["custom_fields"] = json.dumps(
-            [item.extras], ensure_ascii=False, separators=(",", ":")
-        )
+        cf = [{"type": "text", "label": k, "value": str(v)}
+              for k, v in item.extras.items()]
+        base["custom_fields"] = json.dumps(cf, ensure_ascii=False, separators=(",", ":"))
 
     return base
 

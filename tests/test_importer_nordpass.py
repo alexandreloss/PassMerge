@@ -240,7 +240,7 @@ class TestNordPassCustomFields(unittest.TestCase):
     def setUp(self):
         self.imp = NordPassImporter()
 
-    def test_custom_fields_full_entry_stored(self):
+    def test_custom_fields_parsed_into_extras(self):
         cf = json.dumps([{"type": "hidden", "label": "Chave de Segurança", "value": "IBH"}])
         p = _write_csv([{"name": "MyLogin", "url": "https://x.com",
                          "username": "user", "password": "pass",
@@ -248,13 +248,11 @@ class TestNordPassCustomFields(unittest.TestCase):
         try:
             items = self.imp.parse(p)
             self.assertEqual(len(items), 1)
-            self.assertEqual(items[0].extras.get("type"), "hidden")
-            self.assertEqual(items[0].extras.get("label"), "Chave de Segurança")
-            self.assertEqual(items[0].extras.get("value"), "IBH")
+            self.assertEqual(items[0].extras.get("Chave de Segurança"), "IBH")
         finally:
             p.unlink(missing_ok=True)
 
-    def test_multiple_entries_merged_into_extras(self):
+    def test_multiple_custom_fields(self):
         cf = json.dumps([
             {"type": "text",   "label": "Campo1", "value": "Valor1"},
             {"type": "hidden", "label": "Campo2", "value": "Valor2"},
@@ -264,10 +262,8 @@ class TestNordPassCustomFields(unittest.TestCase):
                          "type": "password", "custom_fields": cf}])
         try:
             items = self.imp.parse(p)
-            # last entry wins on duplicate keys; both entries contribute their key-value pairs
-            self.assertEqual(items[0].extras.get("label"), "Campo2")
-            self.assertEqual(items[0].extras.get("value"), "Valor2")
-            self.assertEqual(items[0].extras.get("type"), "hidden")
+            self.assertEqual(items[0].extras.get("Campo1"), "Valor1")
+            self.assertEqual(items[0].extras.get("Campo2"), "Valor2")
         finally:
             p.unlink(missing_ok=True)
 
@@ -291,15 +287,14 @@ class TestNordPassCustomFields(unittest.TestCase):
         finally:
             p.unlink(missing_ok=True)
 
-    def test_entry_without_label_still_stored(self):
+    def test_entry_without_label_skipped(self):
         cf = json.dumps([{"type": "hidden", "value": "IBH"}])
         p = _write_csv([{"name": "MyLogin", "url": "https://x.com",
                          "username": "user", "password": "pass",
                          "type": "password", "custom_fields": cf}])
         try:
             items = self.imp.parse(p)
-            self.assertEqual(items[0].extras.get("type"), "hidden")
-            self.assertEqual(items[0].extras.get("value"), "IBH")
+            self.assertEqual(items[0].extras, {})
         finally:
             p.unlink(missing_ok=True)
 
