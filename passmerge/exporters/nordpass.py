@@ -16,6 +16,27 @@ from ..core.canonical import CanonicalItem, Category
 from ..core.categories import CANONICAL_TO_NORDPASS
 from .base import ExportReport, Exporter
 
+_HIDDEN_WORDS = {
+    "senha", "password", "segredo", "segurança", "security", "secret",
+    "credencial", "credential", "hash", "privado", "privada", "privacy",
+    "contrasenha", "palavra-passe", "passcode", "pin", "confidencial",
+    "arcano", "sigilo", "hidden", "reservado", "reservada", "classified",
+    "restricted", "restrito", "restrita", "classificado", "classificada",
+    "sigiloso", "sigilosa",
+}
+
+_DATE_WORDS = {"data", "tempo", "time", "date", "timestamp"}
+
+
+def _cf_type(label: str) -> str:
+    lower = label.lower()
+    if any(w in lower for w in _HIDDEN_WORDS):
+        return "hidden"
+    if any(w in lower for w in _DATE_WORDS):
+        return "date"
+    return "text"
+
+
 # Colunas na ordem exata do formato atual do NordPass
 _COLUMNS = [
     "name", "url", "additional_urls", "username", "password", "note",
@@ -71,7 +92,7 @@ def _row_for(item: CanonicalItem) -> dict[str, str]:
         base["note"]     = item.notes or ""
 
     if item.extras:
-        cf = [{"type": "text", "label": k, "value": str(v)}
+        cf = [{"type": _cf_type(k), "label": k, "value": str(v)}
               for k, v in item.extras.items()]
         base["custom_fields"] = json.dumps(cf, ensure_ascii=False, separators=(",", ":"))
 
